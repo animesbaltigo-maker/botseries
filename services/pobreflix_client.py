@@ -9,6 +9,7 @@ import ast
 import base64
 from difflib import SequenceMatcher
 import json
+import logging
 import re
 import time
 import unicodedata
@@ -24,6 +25,7 @@ from config import (
     SCRAPER_CONNECTION_LIMIT,
     SEARCH_LIMIT,
     SOURCE_SITE_BASE,
+    UPSTREAM_PROXY_URL,
 )
 from services.tmdb_client import enrich_media_metadata
 
@@ -34,6 +36,7 @@ except Exception:
 
 BASE_URL = SOURCE_SITE_BASE
 SEARCH_URL = f"{BASE_URL}/pesquisar/"
+LOGGER = logging.getLogger(__name__)
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -73,6 +76,11 @@ CACHE_TTL_EPISODES = 60 * 5   # 5 min
 _SEM = asyncio.Semaphore(SCRAPER_CONCURRENCY)
 _SESSION: aiohttp.ClientSession | None = None
 _SESSION_LOCK = asyncio.Lock()
+_PROXY_SENSITIVE_HOSTS = (
+    "streamtape.com",
+    "tapecontent.net",
+    "tpead.net",
+)
 
 
 def _now() -> float:
@@ -436,7 +444,13 @@ async def _get_session() -> aiohttp.ClientSession:
         if _SESSION is None or _SESSION.closed:
             connector = aiohttp.TCPConnector(limit=SCRAPER_CONNECTION_LIMIT, ttl_dns_cache=300)
             timeout = aiohttp.ClientTimeout(total=HTTP_TIMEOUT)
-            _SESSION = aiohttp.ClientSession(connector=connector, timeout=timeout)
+            _SESSION = aiohttp.ClientSession(
+                connector=connector,
+                timeout=timeout,
+                # We pass the proxy explicitly per request so we can truly
+                # alternate between direct and proxied routes when needed.
+                trust_env=False,
+            )
     return _SESSION
 
 
@@ -460,6 +474,28 @@ def _absolute_url(url: str) -> str:
     if url.startswith("/"):
         return f"{BASE_URL}{url}"
     return f"{BASE_URL}/{url.lstrip('/')}"
+
+
+def _url_host(url: str) -> str:
+    try:
+        return urlparse((url or "").strip()).netloc.lower()
+    except Exception:
+        return ""
+
+
+def _should_prefer_proxy(url: str) -> bool:
+    host = _url_host(url)
+    if not host or not UPSTREAM_PROXY_URL:
+        return False
+    return any(host == suffix or host.endswith(f".{suffix}") for suffix in _PROXY_SENSITIVE_HOSTS)
+
+
+def _request_proxy_chain(url: str) -> list[str | None]:
+    if not UPSTREAM_PROXY_URL:
+        return [None]
+    if _should_prefer_proxy(url):
+        return [UPSTREAM_PROXY_URL, None]
+    return [None, UPSTREAM_PROXY_URL]
 
 
 def _normalize_server_name(server: str) -> str:
@@ -1145,31 +1181,45 @@ async def _request_page(
                 headers[key] = value
 
     last_error: Exception | None = None
+    proxy_chain = _request_proxy_chain(url)
 
     for attempt in range(2):
-        try:
-            async with _SEM:
-                session = await _get_session()
-                async with session.request(
-                    method.upper(),
-                    url,
-                    params=params,
-                    data=data,
-                    headers=headers,
-                    allow_redirects=True,
-                    timeout=aiohttp.ClientTimeout(total=HTTP_TIMEOUT),
-                ) as resp:
-                    resp.raise_for_status()
-                    return str(resp.url), await resp.text(
-                        encoding="utf-8",
-                        errors="replace",
+        for request_proxy in proxy_chain:
+            try:
+                async with _SEM:
+                    session = await _get_session()
+                    async with session.request(
+                        method.upper(),
+                        url,
+                        params=params,
+                        data=data,
+                        headers=headers,
+                        allow_redirects=True,
+                        timeout=aiohttp.ClientTimeout(total=HTTP_TIMEOUT),
+                        proxy=request_proxy,
+                    ) as resp:
+                        resp.raise_for_status()
+                        return str(resp.url), await resp.text(
+                            encoding="utf-8",
+                            errors="replace",
+                        )
+            except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
+                last_error = exc
+                if len(proxy_chain) > 1:
+                    route_name = "proxy" if request_proxy else "direct"
+                    LOGGER.debug(
+                        "Falha na rota %s para %s %s: %r",
+                        route_name,
+                        method.upper(),
+                        url,
+                        exc,
                     )
-        except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
-            last_error = exc
-            if attempt == 0:
-                await asyncio.sleep(0.35)
                 continue
-            raise
+
+        if attempt == 0:
+            await asyncio.sleep(0.35)
+            continue
+        break
 
     if last_error is not None:
         raise last_error
