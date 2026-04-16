@@ -4,7 +4,7 @@ import asyncio
 
 import httpx
 
-from config import HTTP_TIMEOUT, SOURCE_SITE_BASE
+from config import HTTP_TIMEOUT, SOURCE_SITE_BASE, UPSTREAM_PROXY_URL
 
 _CLIENT: httpx.AsyncClient | None = None
 _CLIENT_LOCK = asyncio.Lock()
@@ -54,6 +54,10 @@ async def get_http_client() -> httpx.AsyncClient:
                 timeout=_TIMEOUT,
                 limits=_LIMITS,
                 http2=False,
+                proxy=UPSTREAM_PROXY_URL or None,
+                # Proxy routing is controlled explicitly through config so the
+                # behavior stays deterministic across CMD/VPS environments.
+                trust_env=False,
             )
     return _CLIENT
 
