@@ -1,4 +1,4 @@
-import os 
+import os
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -117,6 +117,13 @@ ANTI_FLOOD_SECONDS = _env_float("ANTI_FLOOD_SECONDS", 1.0)
 HTTP_TIMEOUT = _env_int("HTTP_TIMEOUT", 35)
 SEARCH_SESSION_TTL_SECONDS = _env_int("SEARCH_SESSION_TTL_SECONDS", 7200)
 GROUP_AI_HTTP_TIMEOUT = _env_int("GROUP_AI_HTTP_TIMEOUT", 10)
+UPSTREAM_PROXY_URL = (
+    os.getenv("UPSTREAM_PROXY_URL", "").strip()
+    or os.getenv("SCRAPER_PROXY_URL", "").strip()
+    or os.getenv("HTTPS_PROXY", "").strip()
+    or os.getenv("HTTP_PROXY", "").strip()
+    or os.getenv("ALL_PROXY", "").strip()
+)
 
 BOT_API_MAX_CONCURRENT_UPDATES = _env_int("BOT_API_MAX_CONCURRENT_UPDATES", 1000)
 BOT_API_CONNECTION_POOL = _env_int("BOT_API_CONNECTION_POOL", 512)
