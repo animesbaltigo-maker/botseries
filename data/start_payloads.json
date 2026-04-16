@@ -1,0 +1,930 @@
+{
+  "ad603551b13aaef1": {
+    "source": "postanime",
+    "query": "Gravity Falls: Um Verão de Mistérios Gravity Falls",
+    "selected_audio": "dublado",
+    "item": {
+      "id": "assistir-gravity-falls-um-verao-de-misterios-dublado-2012-34902",
+      "title": "Gravity Falls: Um Verão de Mistérios Gravity Falls",
+      "year": "2012",
+      "url": "https://www.pobreflixtv.hair/assistir-gravity-falls-um-verao-de-misterios-dublado-2012-34902/",
+      "image": "https://image.tmdb.org/t/p/w780/21WVSbe9BB3GYnlxr4UF9H4DmO6.jpg",
+      "type": "series",
+      "is_dubbed": true,
+      "audio_urls": {
+        "dublado": "https://www.pobreflixtv.hair/assistir-gravity-falls-um-verao-de-misterios-dublado-2012-34902/"
+      },
+      "audio_options": [
+        "dublado"
+      ],
+      "default_audio": "dublado"
+    }
+  },
+  "2ae6a301dc80ef64": {
+    "source": "postanime",
+    "query": "Patrulha Canina",
+    "selected_audio": "dublado",
+    "item": {
+      "id": "assistir-patrulha-canina-1x17-dublado-31157",
+      "title": "Patrulha Canina",
+      "year": "",
+      "url": "https://www.pobreflixtv.hair/assistir-patrulha-canina-1x17-dublado-31157/",
+      "image": "https://image.tmdb.org/t/p/w780/pQ0bBHR9Q3wurjNMjnqal0gJaYo.jpg",
+      "type": "movie",
+      "is_dubbed": true,
+      "audio_urls": {
+        "dublado": "https://www.pobreflixtv.hair/assistir-patrulha-canina-1x17-dublado-31157/"
+      },
+      "audio_options": [
+        "dublado"
+      ],
+      "default_audio": "dublado"
+    }
+  },
+  "fb89d6e39af47e39": {
+    "source": "postanime",
+    "query": "South Park",
+    "selected_audio": "dublado",
+    "item": {
+      "id": "assistir-south-park-dublado-1997-7333",
+      "title": "South Park",
+      "year": "1997",
+      "url": "https://www.pobreflixtv.hair/assistir-south-park-dublado-1997-7333/",
+      "image": "https://image.tmdb.org/t/p/w780/ojwZ7dO7CUVUjbUDW81XaBjqy6h.jpg",
+      "type": "series",
+      "is_dubbed": true,
+      "audio_urls": {
+        "dublado": "https://www.pobreflixtv.hair/assistir-south-park-dublado-1997-7333/"
+      },
+      "audio_options": [
+        "dublado"
+      ],
+      "default_audio": "dublado"
+    }
+  },
+  "dd46118b8f887088": {
+    "source": "postanime",
+    "query": "Big Mouth",
+    "selected_audio": "dublado",
+    "item": {
+      "id": "assistir-big-mouth-dublado-2017-18001",
+      "title": "Big Mouth",
+      "year": "2017",
+      "url": "https://www.pobreflixtv.hair/assistir-big-mouth-dublado-2017-18001/",
+      "image": "https://image.tmdb.org/t/p/w780/wK4wmV6ruhShWcbFzp59JETAjaz.jpg",
+      "type": "series",
+      "is_dubbed": true,
+      "audio_urls": {
+        "dublado": "https://www.pobreflixtv.hair/assistir-big-mouth-dublado-2017-18001/"
+      },
+      "audio_options": [
+        "dublado"
+      ],
+      "default_audio": "dublado"
+    }
+  },
+  "d26bd45b428cd921": {
+    "source": "postanime",
+    "query": "Rick e Morty Rick and Morty",
+    "selected_audio": "dublado",
+    "item": {
+      "id": "assistir-rick-e-morty-dublado-2013-3296",
+      "title": "Rick e Morty Rick and Morty",
+      "year": "2013",
+      "url": "https://www.pobreflixtv.hair/assistir-rick-e-morty-dublado-2013-3296/",
+      "image": "https://image.tmdb.org/t/p/w780/5qfd0e2uMbVInX3YdeFbDsfxi1t.jpg",
+      "type": "series",
+      "is_dubbed": true,
+      "audio_urls": {
+        "dublado": "https://www.pobreflixtv.hair/assistir-rick-e-morty-dublado-2013-3296/",
+        "legendado": "https://www.pobreflixtv.hair/assistir-rick-e-morty-legendado-2013-25420/"
+      },
+      "audio_options": [
+        "dublado"
+      ],
+      "default_audio": "dublado"
+    }
+  },
+  "f281a184d4a2ff4b": {
+    "source": "postanime",
+    "query": "As Aventuras de Jackie Chan Jackie Chan Adventures",
+    "selected_audio": "dublado",
+    "item": {
+      "id": "assistir-as-aventuras-de-jackie-chan-dublado-2000-47464",
+      "title": "As Aventuras de Jackie Chan Jackie Chan Adventures",
+      "year": "2000",
+      "url": "https://www.pobreflixtv.hair/assistir-as-aventuras-de-jackie-chan-dublado-2000-47464/",
+      "image": "https://image.tmdb.org/t/p/w780/149PSw4MJ0qKIVGvMHqZkT2Lojf.jpg",
+      "type": "series",
+      "is_dubbed": true,
+      "audio_urls": {
+        "dublado": "https://www.pobreflixtv.hair/assistir-as-aventuras-de-jackie-chan-dublado-2000-47464/"
+      },
+      "audio_options": [
+        "dublado"
+      ],
+      "default_audio": "dublado"
+    }
+  },
+  "a021b607e0bfe814": {
+    "source": "postanime",
+    "query": "Avatar: A Lenda de Aang Avatar: The Last Airbender",
+    "selected_audio": "dublado",
+    "item": {
+      "id": "assistir-avatar-a-lenda-de-aang-dublado-2005-31062",
+      "title": "Avatar: A Lenda de Aang Avatar: The Last Airbender",
+      "year": "2005",
+      "url": "https://www.pobreflixtv.hair/assistir-avatar-a-lenda-de-aang-dublado-2005-31062/",
+      "image": "https://image.tmdb.org/t/p/w780/8RFAXPLs3qg5YVYbv5ME46syBKy.jpg",
+      "type": "series",
+      "is_dubbed": true,
+      "audio_urls": {
+        "dublado": "https://www.pobreflixtv.hair/assistir-avatar-a-lenda-de-aang-dublado-2005-31062/"
+      },
+      "audio_options": [
+        "dublado"
+      ],
+      "default_audio": "dublado"
+    }
+  },
+  "fbc048eea3c4beba": {
+    "source": "postanime",
+    "query": "Minhas Aventuras com o Superman My Adventures with Superman",
+    "selected_audio": "dublado",
+    "item": {
+      "id": "assistir-minhas-aventuras-com-o-superman-dublado-2023-21992",
+      "title": "Minhas Aventuras com o Superman My Adventures with Superman",
+      "year": "2023",
+      "url": "https://www.pobreflixtv.hair/assistir-minhas-aventuras-com-o-superman-dublado-2023-21992/",
+      "image": "https://image.tmdb.org/t/p/w780/3pO7UsHqDRqv7FGAzh5pFsZhNtX.jpg",
+      "type": "series",
+      "is_dubbed": true,
+      "audio_urls": {
+        "dublado": "https://www.pobreflixtv.hair/assistir-minhas-aventuras-com-o-superman-dublado-2023-21992/",
+        "legendado": "https://www.pobreflixtv.hair/assistir-minhas-aventuras-com-o-superman-legendado-2023-21997/"
+      },
+      "audio_options": [
+        "dublado"
+      ],
+      "default_audio": "dublado"
+    }
+  },
+  "bffed184870fe4ba": {
+    "source": "postanime",
+    "query": "Steven Universo Steven Universe",
+    "selected_audio": "dublado",
+    "item": {
+      "id": "assistir-steven-universo-dublado-2013-65805",
+      "title": "Steven Universo Steven Universe",
+      "year": "2013",
+      "url": "https://www.pobreflixtv.hair/assistir-steven-universo-dublado-2013-65805/",
+      "image": "https://image.tmdb.org/t/p/w780/6O1uHHMhgBBkDpKiJE53wKvnHmv.jpg",
+      "type": "series",
+      "is_dubbed": true,
+      "audio_urls": {
+        "dublado": "https://www.pobreflixtv.hair/assistir-steven-universo-dublado-2013-65805/"
+      },
+      "audio_options": [
+        "dublado"
+      ],
+      "default_audio": "dublado"
+    }
+  },
+  "e5673cabaa2bb9d1": {
+    "source": "postanime",
+    "query": "Apenas um Show Regular Show",
+    "selected_audio": "dublado",
+    "item": {
+      "id": "assistir-apenas-um-show-dublado-2010-41332",
+      "title": "Apenas um Show Regular Show",
+      "year": "2010",
+      "url": "https://www.pobreflixtv.hair/assistir-apenas-um-show-dublado-2010-41332/",
+      "image": "https://image.tmdb.org/t/p/w780/b56jpir0S12bxD6WyjMZg92c9Zr.jpg",
+      "type": "series",
+      "is_dubbed": true,
+      "audio_urls": {
+        "dublado": "https://www.pobreflixtv.hair/assistir-apenas-um-show-dublado-2010-41332/"
+      },
+      "audio_options": [
+        "dublado"
+      ],
+      "default_audio": "dublado"
+    }
+  },
+  "282efeea9f648e63": {
+    "source": "postanime",
+    "query": "INVENCÍVEL Invincible",
+    "selected_audio": "dublado",
+    "item": {
+      "id": "assistir-invencivel-dublado-2021-1119",
+      "title": "INVENCÍVEL Invincible",
+      "year": "2021",
+      "url": "https://www.pobreflixtv.hair/assistir-invencivel-dublado-2021-1119/",
+      "image": "https://image.tmdb.org/t/p/w780/qhb7RWU9ad9a5m3HbeRRXzjaMXf.jpg",
+      "type": "series",
+      "is_dubbed": true,
+      "audio_urls": {
+        "dublado": "https://www.pobreflixtv.hair/assistir-invencivel-dublado-2021-1119/",
+        "legendado": "https://www.pobreflixtv.hair/assistir-invencivel-legendado-2021-25941/"
+      },
+      "audio_options": [
+        "dublado"
+      ],
+      "default_audio": "dublado"
+    }
+  },
+  "9ab4703941a06b6f": {
+    "source": "postanime",
+    "query": "Os Simpsons The Simpsons",
+    "selected_audio": "dublado",
+    "item": {
+      "id": "assistir-os-simpsons-dublado-1989-31391",
+      "title": "Os Simpsons The Simpsons",
+      "year": "1989",
+      "url": "https://www.pobreflixtv.hair/assistir-os-simpsons-dublado-1989-31391/",
+      "image": "https://image.tmdb.org/t/p/w780/1jGPgDDcmg3Xgs3WO8sfYfbnFoA.jpg",
+      "type": "series",
+      "is_dubbed": true,
+      "audio_urls": {
+        "dublado": "https://www.pobreflixtv.hair/assistir-os-simpsons-dublado-1989-31391/"
+      },
+      "audio_options": [
+        "dublado"
+      ],
+      "default_audio": "dublado"
+    }
+  },
+  "b1e6b7e57d8cd47b": {
+    "source": "postanime",
+    "query": "X-Men '97",
+    "selected_audio": "dublado",
+    "item": {
+      "id": "assistir-x-men-97-dublado-2024-31934",
+      "title": "X-Men '97",
+      "year": "2024",
+      "url": "https://www.pobreflixtv.hair/assistir-x-men-97-dublado-2024-31934/",
+      "image": "https://image.tmdb.org/t/p/w780/yvqC5hw3rkW9vputtZ8PlwYhJRp.jpg",
+      "type": "series",
+      "is_dubbed": true,
+      "audio_urls": {
+        "dublado": "https://www.pobreflixtv.hair/assistir-x-men-97-dublado-2024-31934/",
+        "legendado": "https://www.pobreflixtv.hair/assistir-x-men-97-legendado-2024-31937/"
+      },
+      "audio_options": [
+        "dublado"
+      ],
+      "default_audio": "dublado"
+    }
+  },
+  "d23e46dab9d34c5c": {
+    "source": "postanime",
+    "query": "Miraculous: As Aventuras de Ladybug Miraculous: Tales of Ladybug & Cat Noir",
+    "selected_audio": "dublado",
+    "item": {
+      "id": "assistir-miraculous-as-aventuras-de-ladybug-dublado-2015-63792",
+      "title": "Miraculous: As Aventuras de Ladybug Miraculous: Tales of Ladybug & Cat Noir",
+      "year": "2015",
+      "url": "https://www.pobreflixtv.hair/assistir-miraculous-as-aventuras-de-ladybug-dublado-2015-63792/",
+      "image": "https://image.tmdb.org/t/p/w780/24wf3O8SJeUSJJvDowQR5FDgHGO.jpg",
+      "type": "series",
+      "is_dubbed": true,
+      "audio_urls": {
+        "dublado": "https://www.pobreflixtv.hair/assistir-miraculous-as-aventuras-de-ladybug-dublado-2015-63792/"
+      },
+      "audio_options": [
+        "dublado"
+      ],
+      "default_audio": "dublado"
+    }
+  },
+  "f5eed05e3613ecc5": {
+    "source": "postanime",
+    "query": "Kung Fu Panda: As Patas do Destino Kung Fu Panda: The Paws of Destiny",
+    "selected_audio": "dublado",
+    "item": {
+      "id": "assistir-kung-fu-panda-as-patas-do-destino-dublado-2018-42687",
+      "title": "Kung Fu Panda: As Patas do Destino Kung Fu Panda: The Paws of Destiny",
+      "year": "2018",
+      "url": "https://www.pobreflixtv.hair/assistir-kung-fu-panda-as-patas-do-destino-dublado-2018-42687/",
+      "image": "https://image.tmdb.org/t/p/w780/x4yvmIVuXxYKfTlgRtSJnGC1Izs.jpg",
+      "type": "series",
+      "is_dubbed": true,
+      "audio_urls": {
+        "dublado": "https://www.pobreflixtv.hair/assistir-kung-fu-panda-as-patas-do-destino-dublado-2018-42687/"
+      },
+      "audio_options": [
+        "dublado"
+      ],
+      "default_audio": "dublado"
+    }
+  },
+  "a66f4256072cc1ff": {
+    "source": "postanime",
+    "query": "Marshals: Uma História de Yellowstone Marshals",
+    "selected_audio": "dublado",
+    "item": {
+      "id": "assistir-marshals-uma-historia-de-yellowstone-dublado-2026-67858",
+      "title": "Marshals: Uma História de Yellowstone Marshals",
+      "year": "2026",
+      "url": "https://www.pobreflixtv.hair/assistir-marshals-uma-historia-de-yellowstone-dublado-2026-67858/",
+      "image": "https://image.tmdb.org/t/p/w780/kqzWUZKQYomcJhXA5mDcaZFTWiG.jpg",
+      "type": "series",
+      "is_dubbed": true,
+      "audio_urls": {
+        "dublado": "https://www.pobreflixtv.hair/assistir-marshals-uma-historia-de-yellowstone-dublado-2026-67858/"
+      },
+      "audio_options": [
+        "dublado"
+      ],
+      "default_audio": "dublado"
+    }
+  },
+  "c9332f1222e2068d": {
+    "source": "postanime",
+    "query": "O Incrível Mundo de Gumball The Amazing World of Gumball",
+    "selected_audio": "dublado",
+    "item": {
+      "id": "assistir-o-incrivel-mundo-de-gumball-dublado-2011-54034",
+      "title": "O Incrível Mundo de Gumball The Amazing World of Gumball",
+      "year": "2011",
+      "url": "https://www.pobreflixtv.hair/assistir-o-incrivel-mundo-de-gumball-dublado-2011-54034/",
+      "image": "https://image.tmdb.org/t/p/w780/2NGCRWnZpsIevwpjBLkoXfnqSgg.jpg",
+      "type": "series",
+      "is_dubbed": true,
+      "audio_urls": {
+        "dublado": "https://www.pobreflixtv.hair/assistir-o-incrivel-mundo-de-gumball-dublado-2011-54034/"
+      },
+      "audio_options": [
+        "dublado"
+      ],
+      "default_audio": "dublado"
+    }
+  },
+  "82b28dcbfb3c2fa3": {
+    "source": "postanime",
+    "query": "Uma Família da Pesada Family Guy",
+    "selected_audio": "dublado",
+    "item": {
+      "id": "assistir-uma-familia-da-pesada-dublado-1999-61403",
+      "title": "Uma Família da Pesada Family Guy",
+      "year": "1999",
+      "url": "https://www.pobreflixtv.hair/assistir-uma-familia-da-pesada-dublado-1999-61403/",
+      "image": "https://image.tmdb.org/t/p/w780/j28XGzAhvJNGWEHbYrzvREw7kKd.jpg",
+      "type": "series",
+      "is_dubbed": true,
+      "audio_urls": {
+        "dublado": "https://www.pobreflixtv.hair/assistir-uma-familia-da-pesada-dublado-1999-61403/"
+      },
+      "audio_options": [
+        "dublado"
+      ],
+      "default_audio": "dublado"
+    }
+  },
+  "0c4b7ad2cc26db77": {
+    "source": "postanime",
+    "query": "X-Men: Evolution",
+    "selected_audio": "dublado",
+    "item": {
+      "id": "assistir-x-men-evolution-dublado-2000-30786",
+      "title": "X-Men: Evolution",
+      "year": "2000",
+      "url": "https://www.pobreflixtv.hair/assistir-x-men-evolution-dublado-2000-30786/",
+      "image": "https://image.tmdb.org/t/p/w780/At5aZIKkN8zHTAXOnQR9D3b7usW.jpg",
+      "type": "series",
+      "is_dubbed": true,
+      "audio_urls": {
+        "dublado": "https://www.pobreflixtv.hair/assistir-x-men-evolution-dublado-2000-30786/"
+      },
+      "audio_options": [
+        "dublado"
+      ],
+      "default_audio": "dublado"
+    }
+  },
+  "5107b299750602c0": {
+    "source": "postanime",
+    "query": "Ben 10: Omniverse",
+    "selected_audio": "dublado",
+    "item": {
+      "id": "assistir-ben-10-omniverse-dublado-2012-30618",
+      "title": "Ben 10: Omniverse",
+      "year": "2012",
+      "url": "https://www.pobreflixtv.hair/assistir-ben-10-omniverse-dublado-2012-30618/",
+      "image": "https://image.tmdb.org/t/p/w780/Re9I5tauOspaJxYCIqRqavKT4F.jpg",
+      "type": "series",
+      "is_dubbed": true,
+      "audio_urls": {
+        "dublado": "https://www.pobreflixtv.hair/assistir-ben-10-omniverse-dublado-2012-30618/"
+      },
+      "audio_options": [
+        "dublado"
+      ],
+      "default_audio": "dublado"
+    }
+  },
+  "3fc47dd8a425ee35": {
+    "source": "postanime",
+    "query": "Seu Amigão da Vizinhança: Homem-Aranha Your Friendly Neighborhood Spider-Man",
+    "selected_audio": "dublado",
+    "item": {
+      "id": "assistir-seu-amigao-da-vizinhanca-homem-aranha-legendado-2025-46215",
+      "title": "Seu Amigão da Vizinhança: Homem-Aranha Your Friendly Neighborhood Spider-Man",
+      "year": "2025",
+      "url": "https://www.pobreflixtv.hair/assistir-seu-amigao-da-vizinhanca-homem-aranha-dublado-2025-46212/",
+      "image": "https://image.tmdb.org/t/p/w780/fEhEJowHEcWgqWknxwbdsiHyGty.jpg",
+      "type": "series",
+      "is_dubbed": true,
+      "audio_urls": {
+        "legendado": "https://www.pobreflixtv.hair/assistir-seu-amigao-da-vizinhanca-homem-aranha-legendado-2025-46215/",
+        "dublado": "https://www.pobreflixtv.hair/assistir-seu-amigao-da-vizinhanca-homem-aranha-dublado-2025-46212/"
+      },
+      "audio_options": [
+        "dublado"
+      ],
+      "default_audio": "dublado"
+    }
+  },
+  "4fd2577a436b3dc7": {
+    "source": "postanime",
+    "query": "Ben 10: Força Alienígena Ben 10: Alien Force",
+    "selected_audio": "dublado",
+    "item": {
+      "id": "assistir-ben-10-forca-alienigena-dublado-2008-31701",
+      "title": "Ben 10: Força Alienígena Ben 10: Alien Force",
+      "year": "2008",
+      "url": "https://www.pobreflixtv.hair/assistir-ben-10-forca-alienigena-dublado-2008-31701/",
+      "image": "https://image.tmdb.org/t/p/w780/h49Jc6onlySVTI2Tb9HFxr0exfV.jpg",
+      "type": "series",
+      "is_dubbed": true,
+      "audio_urls": {
+        "dublado": "https://www.pobreflixtv.hair/assistir-ben-10-forca-alienigena-dublado-2008-31701/"
+      },
+      "audio_options": [
+        "dublado"
+      ],
+      "default_audio": "dublado"
+    }
+  },
+  "adb8dd5e80a7cb80": {
+    "source": "postanime",
+    "query": "Os Simpsons The Simpsons",
+    "selected_audio": "dublado",
+    "item": {
+      "id": "assistir-os-simpsons-dublado-1989-31391",
+      "title": "Os Simpsons The Simpsons",
+      "year": "1989",
+      "url": "https://www.pobreflixtv.hair/assistir-os-simpsons-dublado-1989-31391/",
+      "image": "https://image.tmdb.org/t/p/w780/1jGPgDDcmg3Xgs3WO8sfYfbnFoA.jpg",
+      "type": "series",
+      "is_dubbed": true,
+      "audio_urls": {
+        "dublado": "https://www.pobreflixtv.hair/assistir-os-simpsons-dublado-1989-31391/"
+      },
+      "audio_options": [
+        "dublado"
+      ],
+      "default_audio": "dublado"
+    }
+  },
+  "59e5ce5973c5aa03": {
+    "source": "postanime",
+    "query": "Uma Família da Pesada Family Guy",
+    "selected_audio": "dublado",
+    "item": {
+      "id": "assistir-uma-familia-da-pesada-dublado-1999-61403",
+      "title": "Uma Família da Pesada Family Guy",
+      "year": "1999",
+      "url": "https://www.pobreflixtv.hair/assistir-uma-familia-da-pesada-dublado-1999-61403/",
+      "image": "https://image.tmdb.org/t/p/w780/j28XGzAhvJNGWEHbYrzvREw7kKd.jpg",
+      "type": "series",
+      "is_dubbed": true,
+      "audio_urls": {
+        "dublado": "https://www.pobreflixtv.hair/assistir-uma-familia-da-pesada-dublado-1999-61403/"
+      },
+      "audio_options": [
+        "dublado"
+      ],
+      "default_audio": "dublado"
+    }
+  },
+  "0102b19b40ed421d": {
+    "source": "postanime",
+    "query": "INVENCÍVEL Invincible",
+    "selected_audio": "dublado",
+    "item": {
+      "id": "assistir-invencivel-dublado-2021-1119",
+      "title": "INVENCÍVEL Invincible",
+      "year": "2021",
+      "url": "https://www.pobreflixtv.hair/assistir-invencivel-dublado-2021-1119/",
+      "image": "https://image.tmdb.org/t/p/w780/qhb7RWU9ad9a5m3HbeRRXzjaMXf.jpg",
+      "type": "series",
+      "is_dubbed": true,
+      "audio_urls": {
+        "dublado": "https://www.pobreflixtv.hair/assistir-invencivel-dublado-2021-1119/",
+        "legendado": "https://www.pobreflixtv.hair/assistir-invencivel-legendado-2021-25941/"
+      },
+      "audio_options": [
+        "dublado"
+      ],
+      "default_audio": "dublado"
+    }
+  },
+  "6a71ff086f7b0b26": {
+    "source": "postanime",
+    "query": "Rick e Morty Rick and Morty",
+    "selected_audio": "dublado",
+    "item": {
+      "id": "assistir-rick-e-morty-dublado-2013-3296",
+      "title": "Rick e Morty Rick and Morty",
+      "year": "2013",
+      "url": "https://www.pobreflixtv.hair/assistir-rick-e-morty-dublado-2013-3296/",
+      "image": "https://image.tmdb.org/t/p/w780/5qfd0e2uMbVInX3YdeFbDsfxi1t.jpg",
+      "type": "series",
+      "is_dubbed": true,
+      "audio_urls": {
+        "dublado": "https://www.pobreflixtv.hair/assistir-rick-e-morty-dublado-2013-3296/",
+        "legendado": "https://www.pobreflixtv.hair/assistir-rick-e-morty-legendado-2013-25420/"
+      },
+      "audio_options": [
+        "dublado"
+      ],
+      "default_audio": "dublado"
+    }
+  },
+  "e9ac817b6d5f43b4": {
+    "source": "postanime",
+    "query": "Miraculous: As Aventuras de Ladybug Miraculous: Tales of Ladybug & Cat Noir",
+    "selected_audio": "dublado",
+    "item": {
+      "id": "assistir-miraculous-as-aventuras-de-ladybug-dublado-2015-63792",
+      "title": "Miraculous: As Aventuras de Ladybug Miraculous: Tales of Ladybug & Cat Noir",
+      "year": "2015",
+      "url": "https://www.pobreflixtv.hair/assistir-miraculous-as-aventuras-de-ladybug-dublado-2015-63792/",
+      "image": "https://image.tmdb.org/t/p/w780/24wf3O8SJeUSJJvDowQR5FDgHGO.jpg",
+      "type": "series",
+      "is_dubbed": true,
+      "audio_urls": {
+        "dublado": "https://www.pobreflixtv.hair/assistir-miraculous-as-aventuras-de-ladybug-dublado-2015-63792/"
+      },
+      "audio_options": [
+        "dublado"
+      ],
+      "default_audio": "dublado"
+    }
+  },
+  "563c16ff4ee9facb": {
+    "source": "postanime",
+    "query": "Os Simpsons The Simpsons",
+    "selected_audio": "dublado",
+    "item": {
+      "id": "assistir-os-simpsons-dublado-1989-31391",
+      "title": "Os Simpsons The Simpsons",
+      "year": "1989",
+      "url": "https://www.pobreflixtv.hair/assistir-os-simpsons-dublado-1989-31391/",
+      "image": "https://image.tmdb.org/t/p/w780/1jGPgDDcmg3Xgs3WO8sfYfbnFoA.jpg",
+      "type": "series",
+      "is_dubbed": true,
+      "audio_urls": {
+        "dublado": "https://www.pobreflixtv.hair/assistir-os-simpsons-dublado-1989-31391/"
+      },
+      "audio_options": [
+        "dublado"
+      ],
+      "default_audio": "dublado"
+    }
+  },
+  "26c907b78de12669": {
+    "source": "postanime",
+    "query": "Os Simpsons The Simpsons",
+    "selected_audio": "dublado",
+    "item": {
+      "id": "assistir-os-simpsons-dublado-1989-31391",
+      "title": "Os Simpsons The Simpsons",
+      "year": "1989",
+      "url": "https://www.pobreflixtv.hair/assistir-os-simpsons-dublado-1989-31391/",
+      "image": "https://image.tmdb.org/t/p/w780/1jGPgDDcmg3Xgs3WO8sfYfbnFoA.jpg",
+      "type": "series",
+      "is_dubbed": true,
+      "audio_urls": {
+        "dublado": "https://www.pobreflixtv.hair/assistir-os-simpsons-dublado-1989-31391/"
+      },
+      "audio_options": [
+        "dublado"
+      ],
+      "default_audio": "dublado"
+    }
+  },
+  "49818c11e84c8012": {
+    "source": "postanime",
+    "query": "Os Simpsons The Simpsons",
+    "selected_audio": "dublado",
+    "item": {
+      "id": "assistir-os-simpsons-dublado-1989-31391",
+      "title": "Os Simpsons The Simpsons",
+      "year": "1989",
+      "url": "https://www.pobreflixtv.hair/assistir-os-simpsons-dublado-1989-31391/",
+      "image": "https://image.tmdb.org/t/p/w780/1jGPgDDcmg3Xgs3WO8sfYfbnFoA.jpg",
+      "type": "series",
+      "is_dubbed": true,
+      "audio_urls": {
+        "dublado": "https://www.pobreflixtv.hair/assistir-os-simpsons-dublado-1989-31391/"
+      },
+      "audio_options": [
+        "dublado"
+      ],
+      "default_audio": "dublado"
+    }
+  },
+  "8d9fa972f95f7820": {
+    "source": "postanime",
+    "query": "The Boys",
+    "selected_audio": "dublado",
+    "item": {
+      "id": "assistir-the-boys-dublado-2019-u1-854",
+      "title": "The Boys",
+      "year": "2019",
+      "url": "https://www.pobreflixtv.hair/assistir-the-boys-dublado-2019-u1-854/",
+      "image": "https://image.tmdb.org/t/p/w780/in1R2dDc421JxsoRWaIIAqVI2KE.jpg",
+      "type": "series",
+      "is_dubbed": true,
+      "audio_urls": {
+        "dublado": "https://www.pobreflixtv.hair/assistir-the-boys-dublado-2019-u1-854/",
+        "legendado": "https://www.pobreflixtv.hair/assistir-the-boys-legendado-2019-6321/"
+      },
+      "audio_options": [
+        "dublado"
+      ],
+      "default_audio": "dublado"
+    }
+  },
+  "d12fca5738df4a53": {
+    "source": "novoseps",
+    "query": "",
+    "selected_audio": "legendado",
+    "item": {
+      "id": "assistir-the-boys-legendado-2019-6321",
+      "title": "The Boys",
+      "year": "2019",
+      "url": "https://www.pobreflixtv.hair/assistir-the-boys-legendado-2019-6321/",
+      "image": "https://image.tmdb.org/t/p/w780/in1R2dDc421JxsoRWaIIAqVI2KE.jpg",
+      "type": "series",
+      "is_dubbed": false,
+      "audio_urls": {},
+      "audio_options": [
+        "legendado"
+      ],
+      "default_audio": "legendado"
+    }
+  },
+  "7b150fbe9fa9b27f": {
+    "source": "inline",
+    "query": "bom",
+    "selected_audio": "dublado",
+    "item": {
+      "id": "assistir-o-bom-sam-dublado-2019-6077",
+      "title": "O Bom Sam",
+      "year": "2019",
+      "url": "https://www.pobreflixtv.hair/assistir-o-bom-sam-dublado-2019-6077/",
+      "image": "https://image.tmdb.org/t/p/w780/xMu9BUwSOJxkCSiP0UJI87KQ2m8.jpg",
+      "type": "movie",
+      "is_dubbed": true,
+      "audio_urls": {
+        "dublado": "https://www.pobreflixtv.hair/assistir-o-bom-sam-dublado-2019-6077/"
+      },
+      "audio_options": [
+        "dublado"
+      ],
+      "default_audio": "dublado"
+    }
+  },
+  "dce473737aafcb3e": {
+    "source": "inline",
+    "query": "bom",
+    "selected_audio": "dublado",
+    "item": {
+      "id": "assistir-o-bom-dinossauro-dublado-2015-1013",
+      "title": "O Bom Dinossauro",
+      "year": "2015",
+      "url": "https://www.pobreflixtv.hair/assistir-o-bom-dinossauro-dublado-2015-1013/",
+      "image": "https://image.tmdb.org/t/p/w780/6DIObOvdH1jCCIe06DLjQFIsZOY.jpg",
+      "type": "movie",
+      "is_dubbed": true,
+      "audio_urls": {
+        "dublado": "https://www.pobreflixtv.hair/assistir-o-bom-dinossauro-dublado-2015-1013/"
+      },
+      "audio_options": [
+        "dublado"
+      ],
+      "default_audio": "dublado"
+    }
+  },
+  "894447c2ade85f25": {
+    "source": "inline",
+    "query": "bom",
+    "selected_audio": "dublado",
+    "item": {
+      "id": "assistir-o-lado-bom-da-vida-dublado-2012-1049",
+      "title": "O Lado Bom da Vida",
+      "year": "2012",
+      "url": "https://www.pobreflixtv.hair/assistir-o-lado-bom-da-vida-dublado-2012-1049/",
+      "image": "https://image.tmdb.org/t/p/w780/5R2ZLkflncVmRzTvSVP7MooxZ0C.jpg",
+      "type": "movie",
+      "is_dubbed": true,
+      "audio_urls": {
+        "dublado": "https://www.pobreflixtv.hair/assistir-o-lado-bom-da-vida-dublado-2012-1049/"
+      },
+      "audio_options": [
+        "dublado"
+      ],
+      "default_audio": "dublado"
+    }
+  },
+  "e1e30806c098453c": {
+    "source": "inline",
+    "query": "bom",
+    "selected_audio": "dublado",
+    "item": {
+      "id": "assistir-como-e-bom-se-divertir-dublado-1947-6787",
+      "title": "Como é Bom se Divertir",
+      "year": "1947",
+      "url": "https://www.pobreflixtv.hair/assistir-como-e-bom-se-divertir-dublado-1947-6787/",
+      "image": "https://image.tmdb.org/t/p/w780/tGOVtD7F6WYb0n3dR4PLauS6wj.jpg",
+      "type": "movie",
+      "is_dubbed": true,
+      "audio_urls": {
+        "dublado": "https://www.pobreflixtv.hair/assistir-como-e-bom-se-divertir-dublado-1947-6787/"
+      },
+      "audio_options": [
+        "dublado"
+      ],
+      "default_audio": "dublado"
+    }
+  },
+  "c2db6fbecddc3abc": {
+    "source": "inline",
+    "query": "bom",
+    "selected_audio": "dublado",
+    "item": {
+      "id": "assistir-zohan-um-agente-bom-de-corte-dublado-2008-58033",
+      "title": "Zohan: Um Agente Bom de Corte",
+      "year": "2008",
+      "url": "https://www.pobreflixtv.hair/assistir-zohan-um-agente-bom-de-corte-dublado-2008-58033/",
+      "image": "https://image.tmdb.org/t/p/w780/mT81xdLGdexnLfPqiNjjZ2BR82u.jpg",
+      "type": "movie",
+      "is_dubbed": true,
+      "audio_urls": {
+        "dublado": "https://www.pobreflixtv.hair/assistir-zohan-um-agente-bom-de-corte-dublado-2008-58033/"
+      },
+      "audio_options": [
+        "dublado"
+      ],
+      "default_audio": "dublado"
+    }
+  },
+  "7fe0ce17f4143220": {
+    "source": "inline",
+    "query": "bom",
+    "selected_audio": "dublado",
+    "item": {
+      "id": "assistir-the-good-doctor-o-bom-doutor-1x1-dublado-3802",
+      "title": "The Good Doctor: O Bom Doutor",
+      "year": "2017",
+      "url": "https://www.pobreflixtv.hair/assistir-the-good-doctor-o-bom-doutor-1x1-dublado-3802/",
+      "image": "https://image.tmdb.org/t/p/w780/jtLB7xJKcbekmOYkb5NZditBsgk.jpg",
+      "type": "movie",
+      "is_dubbed": true,
+      "audio_urls": {
+        "dublado": "https://www.pobreflixtv.hair/assistir-the-good-doctor-o-bom-doutor-1x1-dublado-3802/"
+      },
+      "audio_options": [
+        "legendado"
+      ],
+      "default_audio": "legendado"
+    }
+  },
+  "6e236ab533ce3849": {
+    "source": "inline",
+    "query": "bom",
+    "selected_audio": "dublado",
+    "item": {
+      "id": "assistir-mortal-kombat-legends-cage-bom-de-luta-dublado-2023-26597",
+      "title": "Mortal Kombat Legends: Cage Bom de Luta",
+      "year": "2023",
+      "url": "https://www.pobreflixtv.hair/assistir-mortal-kombat-legends-cage-bom-de-luta-dublado-2023-26597/",
+      "image": "https://image.tmdb.org/t/p/w780/qx6DPthpaAZEUfcKaAoP3OL3aW2.jpg",
+      "type": "movie",
+      "is_dubbed": true,
+      "audio_urls": {
+        "dublado": "https://www.pobreflixtv.hair/assistir-mortal-kombat-legends-cage-bom-de-luta-dublado-2023-26597/"
+      },
+      "audio_options": [
+        "dublado"
+      ],
+      "default_audio": "dublado"
+    }
+  },
+  "c43adad0f5b74517": {
+    "source": "inline",
+    "query": "bom",
+    "selected_audio": "dublado",
+    "item": {
+      "id": "assistir-duro-de-matar-um-bom-dia-para-morrer-dublado-2013-2349",
+      "title": "Duro de Matar: Um Bom Dia para Morrer",
+      "year": "2013",
+      "url": "https://www.pobreflixtv.hair/assistir-duro-de-matar-um-bom-dia-para-morrer-dublado-2013-2349/",
+      "image": "https://image.tmdb.org/t/p/w780/qlBdUUjm7Q5CMyv5yRNNhfnydVd.jpg",
+      "type": "movie",
+      "is_dubbed": true,
+      "audio_urls": {
+        "dublado": "https://www.pobreflixtv.hair/assistir-duro-de-matar-um-bom-dia-para-morrer-dublado-2013-2349/"
+      },
+      "audio_options": [
+        "dublado"
+      ],
+      "default_audio": "dublado"
+    }
+  },
+  "7f006bbfac6934ae": {
+    "source": "inline",
+    "query": "the",
+    "selected_audio": "dublado",
+    "item": {
+      "id": "assistir-the-boys-dublado-2019-u1-854",
+      "title": "The Boys",
+      "year": "2019",
+      "url": "https://www.pobreflixtv.hair/assistir-the-boys-dublado-2019-u1-854/",
+      "image": "https://image.tmdb.org/t/p/w780/in1R2dDc421JxsoRWaIIAqVI2KE.jpg",
+      "type": "series",
+      "is_dubbed": true,
+      "audio_urls": {
+        "dublado": "https://www.pobreflixtv.hair/assistir-the-boys-dublado-2019-u1-854/",
+        "legendado": "https://www.pobreflixtv.hair/assistir-the-boys-legendado-2019-6321/"
+      },
+      "audio_options": [
+        "dublado"
+      ],
+      "default_audio": "dublado"
+    }
+  },
+  "18a77dd03cff81af": {
+    "source": "novoseps",
+    "query": "",
+    "selected_audio": "legendado",
+    "item": {
+      "id": "assistir-demolidor-renascido-legendado-2025-47229",
+      "title": "Demolidor: Renascido Daredevil: Born Again",
+      "year": "2025",
+      "url": "https://www.pobreflixtv.hair/assistir-demolidor-renascido-legendado-2025-47229/",
+      "image": "https://image.tmdb.org/t/p/w780/r5hNFtkNAauxc2G4VUlnJOaVIb0.jpg",
+      "type": "series",
+      "is_dubbed": false,
+      "audio_urls": {},
+      "audio_options": [
+        "legendado"
+      ],
+      "default_audio": "legendado"
+    }
+  },
+  "c8362e6bd10d0a2d": {
+    "source": "inline",
+    "query": "Andor",
+    "selected_audio": "dublado",
+    "item": {
+      "id": "assistir-andor-dublado-2022-15012",
+      "title": "Andor",
+      "year": "2022",
+      "url": "https://www.pobreflixtv.hair/assistir-andor-dublado-2022-15012/",
+      "image": "https://image.tmdb.org/t/p/w780/yX8c3bXKzAquEKQ75eQslnodskK.jpg",
+      "type": "series",
+      "is_dubbed": true,
+      "audio_urls": {
+        "dublado": "https://www.pobreflixtv.hair/assistir-andor-dublado-2022-15012/",
+        "legendado": "https://www.pobreflixtv.hair/assistir-andor-legendado-2022-15050/"
+      },
+      "audio_options": [
+        "dublado"
+      ],
+      "default_audio": "dublado"
+    }
+  },
+  "92c1c9b8ae9e8875": {
+    "source": "novoseps",
+    "query": "",
+    "selected_audio": "dublado",
+    "item": {
+      "id": "assistir-sentenced-to-be-a-hero-dublado-2026-64301",
+      "title": "Sentenced to Be a Hero",
+      "year": "2026",
+      "url": "https://www.pobreflixtv.hair/assistir-sentenced-to-be-a-hero-dublado-2026-64301/",
+      "image": "https://image.tmdb.org/t/p/w780/juGNOhRx7MXg3i2NuZ9lR6arVQw.jpg",
+      "type": "series",
+      "is_dubbed": true,
+      "audio_urls": {},
+      "audio_options": [
+        "dublado"
+      ],
+      "default_audio": "dublado"
+    }
+  }
+}
