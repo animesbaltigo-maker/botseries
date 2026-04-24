@@ -53,6 +53,17 @@ def _env_float(name: str, default: float) -> float:
         return default
 
 
+def _env_bool(name: str, default: bool) -> bool:
+    raw = os.getenv(name, "").strip().lower()
+    if not raw:
+        return default
+    if raw in {"1", "true", "yes", "on", "sim"}:
+        return True
+    if raw in {"0", "false", "no", "off", "nao", "não"}:
+        return False
+    return default
+
+
 def _normalize_telegram_url(value: str) -> str:
     raw = (value or "").strip()
     if not raw:
@@ -133,3 +144,18 @@ BOT_API_READ_TIMEOUT = _env_float("BOT_API_READ_TIMEOUT", 25.0)
 BOT_API_WRITE_TIMEOUT = _env_float("BOT_API_WRITE_TIMEOUT", 25.0)
 SCRAPER_CONCURRENCY = _env_int("SCRAPER_CONCURRENCY", 64)
 SCRAPER_CONNECTION_LIMIT = _env_int("SCRAPER_CONNECTION_LIMIT", 256)
+
+VIDEO_SEND_ENABLED = _env_bool("VIDEO_SEND_ENABLED", True)
+VIDEO_SEND_CONCURRENCY = _env_int("VIDEO_SEND_CONCURRENCY", 1)
+VIDEO_SEND_MAX_MB = _env_int("VIDEO_SEND_MAX_MB", 50)
+VIDEO_SEND_TIMEOUT = _env_int("VIDEO_SEND_TIMEOUT", 3600)
+VIDEO_TMP_DIR = Path(os.getenv("VIDEO_TMP_DIR", str(DATA_DIR / "video_tmp")).strip())
+VIDEO_TMP_DIR.mkdir(parents=True, exist_ok=True)
+EPISODE_CACHE_CHAT_ID = os.getenv("EPISODE_CACHE_CHAT_ID", "").strip()
+
+WATCH_BLOCK_BRAND = os.getenv("WATCH_BLOCK_BRAND", "BaltigoFlix").strip() or "BaltigoFlix"
+WATCH_BLOCK_URL = (
+    os.getenv("WATCH_BLOCK_URL", "http://baltigoflix.com.br/").strip()
+    or "http://baltigoflix.com.br/"
+)
+WATCH_BLOCK_PROMO_COOLDOWN = _env_int("WATCH_BLOCK_PROMO_COOLDOWN", 45)
