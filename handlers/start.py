@@ -116,6 +116,7 @@ async def _open_deeplink_payload_from_start(
     context: ContextTypes.DEFAULT_TYPE,
     payload: str,
 ) -> bool:
+    user = update.effective_user
     message = update.effective_message
     if not message:
         return False
@@ -221,7 +222,11 @@ async def _open_deeplink_payload_from_start(
         }
 
         session_token = _store_content_session(context, content_session)
-        keyboard = _detail_keyboard(session_token, content_session)
+        keyboard = _detail_keyboard(
+            session_token,
+            content_session,
+            user_id=getattr(user, "id", 0) or 0,
+        )
 
         await _safe_delete(service_message)
         await _reply_panel(
@@ -232,7 +237,8 @@ async def _open_deeplink_payload_from_start(
         )
         return True
 
-    except Exception:
+    except Exception as exc:
+        print("ERRO START DEEPLINK:", repr(exc))
         await _safe_delete(service_message)
         await message.reply_text(
             "❌ <b>Não consegui abrir esse conteúdo agora.</b>\n\n<i>Tente novamente em instantes.</i>",
