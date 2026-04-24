@@ -10,6 +10,7 @@ from telegram import (
     InlineKeyboardMarkup,
     InlineQueryResultArticle,
     InlineQueryResultPhoto,
+    InlineQueryResultsButton,
     InputTextMessageContent,
     Update,
 )
@@ -17,6 +18,7 @@ from telegram.ext import ContextTypes
 
 from services.catalog_client import get_content_details, search_content
 from services.start_payloads import build_start_link, create_start_payload
+from utils.gatekeeper import is_user_in_required_channel
 
 INLINE_TIMEOUT = 10.0
 INLINE_DETAIL_TIMEOUT = 12.0
@@ -25,6 +27,7 @@ INLINE_LIMIT = 10
 INLINE_PAYLOAD_TTL = 60 * 60
 INLINE_PAYLOAD_PREFIX = "pb_i_"
 INLINE_PAYLOADS_KEY = "pb_inline_payloads"
+INLINE_GATE_START_PARAMETER = "gate_join"
 
 
 def _now() -> float:
@@ -194,6 +197,20 @@ async def _safe_get_detail(item: dict) -> dict:
 async def inline_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.inline_query
     if not query:
+        return
+
+    user = getattr(query, "from_user", None)
+    user_id = getattr(user, "id", 0) or 0
+    if user_id and not await is_user_in_required_channel(context.bot, user_id):
+        await query.answer(
+            [],
+            cache_time=0,
+            is_personal=True,
+            button=InlineQueryResultsButton(
+                text="📢 Entrar no canal para usar",
+                start_parameter=INLINE_GATE_START_PARAMETER,
+            ),
+        )
         return
 
     text = (query.query or "").strip()
