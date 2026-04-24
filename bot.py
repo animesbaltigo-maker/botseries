@@ -41,13 +41,15 @@ from handlers.referral import indicacoes, referral_button
 from handlers.referral_admin import auto_referral_check_job, refstats
 from handlers.search import buscar
 from handlers.start import start
-from handlers.watch_admin import bloqueareps
+from handlers.watch_admin import bloqueareps, liberaeps
 from services.metrics import init_metrics_db
 from services.catalog_client import close_catalog_client
+from services.episode_delivery import init_episode_delivery_db
 from services.referral_db import init_referral_db
 
 init_metrics_db()
 init_referral_db()
+init_episode_delivery_db()
 
 LOGGER = logging.getLogger(__name__)
 
@@ -142,6 +144,7 @@ def main() -> None:
     app.add_handler(CommandHandler("metricas", metricas))
     app.add_handler(CommandHandler("metricaslimpar", metricas_limpar))
     app.add_handler(CommandHandler("bloqueareps", bloqueareps))
+    app.add_handler(CommandHandler("liberaeps", liberaeps))
     app.add_handler(CommandHandler("pedido", pedido))
     app.add_handler(CommandHandler("esquecer", esquecer_handler))
 
