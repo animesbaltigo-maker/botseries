@@ -10,11 +10,17 @@ from urllib.parse import urlparse
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
-from config import EPISODES_PER_PAGE, SEARCH_SESSION_TTL_SECONDS
+from config import (
+    EPISODES_PER_PAGE,
+    SEARCH_SESSION_TTL_SECONDS,
+    WATCH_BLOCK_BRAND,
+    WATCH_BLOCK_PROMO_COOLDOWN,
+    WATCH_BLOCK_URL,
+)
 from handlers.discover import callback_launches, callback_random
 from handlers.search import _build_results_keyboard, _build_search_text, get_search_session
 from services.metrics import log_event, mark_user_seen
-from services.watch_guard import is_watch_blocked
+from services.watch_guard import is_watch_block_active_for_user
 from services.catalog_client import (
     get_content_details,
     get_episodes,
@@ -28,6 +34,11 @@ from utils.gatekeeper import ensure_channel_membership
 CALLBACK_COOLDOWN = 0.25
 _USER_CB_LOCKS: dict[int, asyncio.Lock] = {}
 _LAST_CB: dict[int, float] = {}
+_PLAYER_FETCH_LOCKS: dict[str, asyncio.Lock] = {}
+_RECENT_PLAYER_URLS: dict[str, list[dict]] = {}
+_RECENT_PLAYER_URLS_LOCK = asyncio.Lock()
+_RECENT_PLAYER_URL_TTL = 120.0
+_WATCH_BLOCK_PROMOS: dict[str, float] = {}
 
 
 def _now() -> float:
@@ -39,6 +50,14 @@ def _user_lock(user_id: int) -> asyncio.Lock:
     if lock is None:
         lock = asyncio.Lock()
         _USER_CB_LOCKS[user_id] = lock
+    return lock
+
+
+def _player_fetch_lock(content_key: str) -> asyncio.Lock:
+    lock = _PLAYER_FETCH_LOCKS.get(content_key)
+    if lock is None:
+        lock = asyncio.Lock()
+        _PLAYER_FETCH_LOCKS[content_key] = lock
     return lock
 
 
@@ -67,6 +86,94 @@ def _seasons_cache_key(token: str, audio: str = "") -> str:
 def _movie_cache_key(token: str, audio: str = "") -> str:
     audio_key = (audio or "default").strip().lower()
     return f"pb_movie_cache:{token}:{audio_key}"
+
+
+def _player_request_key(content_url: str, audio_key: str = "") -> str:
+    return f"{str(content_url or '').strip()}|{str(audio_key or '').strip().lower()}"
+
+
+def _owner_request_key(user, session_token: str) -> str:
+    user_id = getattr(user, "id", 0) or 0
+    return f"{user_id}:{session_token}"
+
+
+def _is_watch_locked_for_user(user) -> bool:
+    user_id = getattr(user, "id", 0) or 0
+    return is_watch_block_active_for_user(user_id)
+
+
+def _is_temporary_player_url(url: str) -> bool:
+    value = (url or "").strip().lower()
+    if not value:
+        return False
+    if "streamtape.com/get_video" in value or "/get_video?" in value:
+        return True
+    if "tapecontent.net/" in value:
+        return True
+    return any(token in value for token in ("expires=", "token=", "ip="))
+
+
+def _should_reuse_player_links(player_links: dict | None) -> bool:
+    if not isinstance(player_links, dict) or not player_links:
+        return False
+    player_url = str(player_links.get("player_url") or "").strip()
+    if not player_url:
+        return False
+    return not _is_temporary_player_url(player_url)
+
+
+async def _reserve_player_url(content_key: str, owner_key: str, player_url: str) -> bool:
+    now = _now()
+    async with _RECENT_PLAYER_URLS_LOCK:
+        entries = list(_RECENT_PLAYER_URLS.get(content_key) or [])
+        entries = [
+            entry
+            for entry in entries
+            if now - float(entry.get("time") or 0.0) <= _RECENT_PLAYER_URL_TTL
+        ]
+
+        for entry in entries:
+            if entry.get("url") == player_url and entry.get("owner") != owner_key:
+                _RECENT_PLAYER_URLS[content_key] = entries
+                return False
+
+        entries = [
+            entry
+            for entry in entries
+            if not (entry.get("url") == player_url and entry.get("owner") == owner_key)
+        ]
+        entries.append({"url": player_url, "owner": owner_key, "time": now})
+        _RECENT_PLAYER_URLS[content_key] = entries[-12:]
+        return True
+
+
+async def _fetch_unique_player_links(
+    content_url: str,
+    preferred_audio: str,
+    owner_key: str,
+) -> dict:
+    content_key = _player_request_key(content_url, preferred_audio)
+    last_links: dict = {}
+
+    async with _player_fetch_lock(content_key):
+        for attempt in range(4):
+            fetched = await asyncio.wait_for(
+                get_player_links(str(content_url or ""), preferred_audio=preferred_audio),
+                timeout=18,
+            )
+            player_links = fetched if isinstance(fetched, dict) else {}
+            player_url = str(player_links.get("player_url") or "").strip()
+            last_links = player_links
+
+            if not player_url or not _is_temporary_player_url(player_url):
+                return player_links
+
+            if await _reserve_player_url(content_key, owner_key, player_url):
+                return player_links
+
+            await asyncio.sleep(0.45 + (attempt * 0.25))
+
+    return last_links
 
 
 def _prune_content_sessions(context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -208,9 +315,62 @@ async def _restore_reply_markup(message, reply_markup) -> None:
         pass
 
 
+def _watch_block_promo_key(query) -> str:
+    message = getattr(query, "message", None)
+    chat_id = getattr(message, "chat_id", None) or getattr(getattr(message, "chat", None), "id", 0) or 0
+    user_id = getattr(getattr(query, "from_user", None), "id", 0) or 0
+    return f"{chat_id}:{user_id}"
+
+
+def _watch_block_alert_text() -> str:
+    return f"🔒 Disponível apenas para assinantes da {WATCH_BLOCK_BRAND}."
+
+
+def _watch_block_message_text() -> str:
+    brand = html.escape(WATCH_BLOCK_BRAND)
+    return (
+        f"🔒 <b>Conteúdo exclusivo para assinantes da {brand}</b>\n\n"
+        "Esse filme ou episódio está bloqueado aqui no bot no momento.\n\n"
+        f"Para assistir com acesso liberado, suporte e catálogo dedicado, assine a "
+        f"<b>{brand}</b> pelo botão abaixo."
+    )
+
+
+def _watch_block_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [[InlineKeyboardButton(f"✨ Assinar {WATCH_BLOCK_BRAND}", url=WATCH_BLOCK_URL)]]
+    )
+
+
+async def _send_watch_block_message(query) -> None:
+    message = getattr(query, "message", None)
+    if not message:
+        return
+
+    cooldown = max(int(WATCH_BLOCK_PROMO_COOLDOWN or 0), 0)
+    promo_key = _watch_block_promo_key(query)
+    now = _now()
+    if cooldown > 0:
+        last_sent = float(_WATCH_BLOCK_PROMOS.get(promo_key) or 0.0)
+        if now - last_sent < cooldown:
+            return
+
+    try:
+        await message.reply_text(
+            _watch_block_message_text(),
+            parse_mode="HTML",
+            reply_markup=_watch_block_keyboard(),
+            disable_web_page_preview=True,
+        )
+        _WATCH_BLOCK_PROMOS[promo_key] = now
+    except Exception:
+        pass
+
+
 async def _show_watch_blocked(query, reply_markup) -> None:
     await _restore_reply_markup(getattr(query, "message", None), reply_markup)
-    await _safe_answer(query, "❌ Você não está autorizado a assistir no momento.", show_alert=True)
+    await _safe_answer(query, _watch_block_alert_text(), show_alert=True)
+    await _send_watch_block_message(query)
 
 
 async def _finish_video_delivery(message, request, reply_markup) -> None:
@@ -376,11 +536,11 @@ def _build_detail_text(detail: dict) -> str:
     )
 
 
-def _detail_keyboard(session_token: str, session: dict) -> InlineKeyboardMarkup:
+def _detail_keyboard(session_token: str, session: dict, *, user_id: int = 0) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
     audio_urls = session.get("audio_urls") or {}
     audio_options = [key for key in ("dublado", "legendado") if str(audio_urls.get(key) or "").strip()]
-    watch_blocked = is_watch_blocked() and str(session.get("type") or "movie") != "series"
+    watch_blocked = is_watch_block_active_for_user(user_id) and str(session.get("type") or "movie") != "series"
 
     if not audio_options:
         audio_options = [
@@ -667,11 +827,16 @@ async def _load_series_payload(
     return seasons, episodes
 
 
-async def _load_movie_player(context: ContextTypes.DEFAULT_TYPE, session_token: str) -> dict:
+async def _load_movie_player(
+    context: ContextTypes.DEFAULT_TYPE,
+    session_token: str,
+    *,
+    owner_key: str = "",
+) -> dict:
     session = _get_content_session(context, session_token)
     selected_audio = str(session.get("selected_audio") or session.get("default_audio") or "").strip().lower()
     cached = context.user_data.get(_movie_cache_key(session_token, selected_audio))
-    if isinstance(cached, dict) and cached:
+    if _should_reuse_player_links(cached):
         return cached
 
     audio_urls = session.get("audio_urls") or {}
@@ -679,11 +844,18 @@ async def _load_movie_player(context: ContextTypes.DEFAULT_TYPE, session_token: 
     if not url:
         return {}
 
-    player_links = await get_player_links(url, preferred_audio=selected_audio)
+    player_links = await _fetch_unique_player_links(
+        url,
+        selected_audio,
+        owner_key or _player_request_key(url, selected_audio),
+    )
     if not isinstance(player_links, dict):
         player_links = {}
 
-    context.user_data[_movie_cache_key(session_token, selected_audio)] = player_links
+    if _should_reuse_player_links(player_links):
+        context.user_data[_movie_cache_key(session_token, selected_audio)] = player_links
+    else:
+        context.user_data.pop(_movie_cache_key(session_token, selected_audio), None)
     return player_links
 
 
@@ -778,7 +950,14 @@ async def _show_movie_player_panel(
         return
 
     try:
-        player_links = await asyncio.wait_for(_load_movie_player(context, session_token), timeout=18)
+        player_links = await asyncio.wait_for(
+            _load_movie_player(
+                context,
+                session_token,
+                owner_key=_owner_request_key(user, session_token),
+            ),
+            timeout=18,
+        )
     except Exception as exc:
         print("ERRO MOVIE PLAYER:", repr(exc))
         await _restore_reply_markup(getattr(query, "message", None), restore_markup)
@@ -849,7 +1028,7 @@ async def _show_detail_panel(
 
     text = str(session.get("detail_text") or "")
     image = str(session.get("image") or "").strip()
-    keyboard = _detail_keyboard(session_token, session)
+    keyboard = _detail_keyboard(session_token, session, user_id=getattr(getattr(query, "from_user", None), "id", 0) or 0)
 
     if create_new:
         await _reply_panel(query.message, text, keyboard, image=image)
@@ -1059,7 +1238,7 @@ async def _handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             await _safe_answer(query, "Sessão expirada. Faça uma nova busca.", show_alert=True)
             return
 
-        if str(session.get("type") or "movie") != "series" and is_watch_blocked():
+        if str(session.get("type") or "movie") != "series" and _is_watch_locked_for_user(user):
             await _show_watch_blocked(query, original_markup)
             return
 
@@ -1119,7 +1298,7 @@ async def _handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             await _safe_answer(query)
             return
 
-        if is_watch_blocked():
+        if _is_watch_locked_for_user(user):
             await _show_watch_blocked(query, original_markup)
             return
 
@@ -1141,7 +1320,7 @@ async def _handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             await _safe_answer(query, "SessÃ£o expirada. FaÃ§a uma nova busca.", show_alert=True)
             return
 
-        if is_watch_blocked():
+        if _is_watch_locked_for_user(user):
             await _show_watch_blocked(query, original_markup)
             return
 
@@ -1194,7 +1373,7 @@ async def _handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             await _safe_answer(query, "SessÃ£o expirada. FaÃ§a uma nova busca.", show_alert=True)
             return
 
-        if is_watch_blocked():
+        if _is_watch_locked_for_user(user):
             await _show_watch_blocked(query, original_markup)
             return
 
@@ -1271,7 +1450,7 @@ async def _handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             await _safe_answer(query, "Sessão expirada. Faça uma nova busca.", show_alert=True)
             return
 
-        if is_watch_blocked():
+        if _is_watch_locked_for_user(user):
             await _show_watch_blocked(query, original_markup)
             return
 
@@ -1291,11 +1470,12 @@ async def _handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         episode = episodes[episode_idx]
         player_links = episode.get("player_links") if isinstance(episode, dict) else {}
         selected_audio = str(session.get("selected_audio") or session.get("default_audio") or "").strip().lower()
-        if not isinstance(player_links, dict) or not player_links:
+        if not _should_reuse_player_links(player_links):
             try:
-                player_links = await asyncio.wait_for(
-                    get_player_links(str(episode.get("url") or ""), preferred_audio=selected_audio),
-                    timeout=18,
+                player_links = await _fetch_unique_player_links(
+                    str(episode.get("url") or ""),
+                    selected_audio,
+                    _owner_request_key(user, session_token),
                 )
             except Exception as exc:
                 print("ERRO PLAYER LINKS:", repr(exc))
@@ -1308,7 +1488,10 @@ async def _handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             return
 
         if isinstance(episode, dict):
-            episode["player_links"] = player_links
+            if _should_reuse_player_links(player_links):
+                episode["player_links"] = player_links
+            else:
+                episode.pop("player_links", None)
         context.user_data[_episodes_cache_key(session_token, season, selected_audio)] = episodes
 
         title = str(session.get("title") or "")
