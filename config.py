@@ -103,14 +103,14 @@ STICKER_DIVISOR = os.getenv(
 
 ADMIN_IDS = [
     int(value.strip())
-    for value in os.getenv("ADMIN_IDS", "").split(",")
+    for value in os.getenv("ADMIN_IDS", "1852596083").split(",")
     if value.strip().isdigit()
 ]
 
 
 ADMIN_IDS = {
     int(x.strip())
-    for x in os.getenv("ADMIN_IDS", "").split(",")
+    for x in os.getenv("ADMIN_IDS", "1852596083").split(",")
     if x.strip().isdigit()
 }
 
