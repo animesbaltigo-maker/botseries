@@ -205,6 +205,116 @@ def is_active_subscriber(user_id: int) -> bool:
     return get_active_subscription(user_id) is not None
 
 
+def grant_manual_subscription(
+    user_id: int,
+    days: int,
+    *,
+    plan_code: str = "manual",
+    plan_name: str = "Liberacao manual",
+    updated_by: int = 0,
+) -> dict:
+    init_subscriptions_db()
+    normalized_user_id = int(user_id or 0)
+    normalized_days = int(days or 0)
+    if normalized_user_id <= 0:
+        raise ValueError("user_id_invalido")
+    if normalized_days <= 0:
+        raise ValueError("dias_invalidos")
+
+    now = int(time.time())
+    current = get_active_subscription(normalized_user_id)
+    base = max(now, int((current or {}).get("expires_at") or 0))
+    expires_at = base + (normalized_days * 86400)
+    code = _normalize_code(plan_code) or f"manual_{normalized_days}d"
+    name = _text(plan_name) or f"Liberacao manual {normalized_days}d"
+    event_id = f"manual:{normalized_user_id}:{now}:{int(updated_by or 0)}"
+    payload = {
+        "source": "manual",
+        "user_id": normalized_user_id,
+        "days": normalized_days,
+        "updated_by": int(updated_by or 0),
+        "starts_at": now,
+        "expires_at": expires_at,
+    }
+
+    with _connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO user_subscriptions (
+                user_id, status, plan_code, plan_name, starts_at, expires_at,
+                cakto_order_id, cakto_subscription_id, updated_at
+            )
+            VALUES (?, 'active', ?, ?, ?, ?, ?, '', ?)
+            ON CONFLICT(user_id) DO UPDATE SET
+                status = 'active',
+                plan_code = excluded.plan_code,
+                plan_name = excluded.plan_name,
+                expires_at = excluded.expires_at,
+                cakto_order_id = excluded.cakto_order_id,
+                cakto_subscription_id = excluded.cakto_subscription_id,
+                updated_at = excluded.updated_at
+            """,
+            (
+                normalized_user_id,
+                code,
+                name,
+                now,
+                expires_at,
+                f"manual:{int(updated_by or 0)}",
+                now,
+            ),
+        )
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO subscription_events (
+                event_id, event_type, user_id, token, payload_json, created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                event_id,
+                "manual_grant",
+                normalized_user_id,
+                "",
+                json.dumps(payload, ensure_ascii=False),
+                now,
+            ),
+        )
+        conn.commit()
+    return get_subscription(normalized_user_id) or {}
+
+
+def cancel_manual_subscription(user_id: int, *, updated_by: int = 0) -> dict | None:
+    init_subscriptions_db()
+    normalized_user_id = int(user_id or 0)
+    if normalized_user_id <= 0:
+        raise ValueError("user_id_invalido")
+    now = int(time.time())
+    with _connect() as conn:
+        conn.execute(
+            "UPDATE user_subscriptions SET status = 'canceled', updated_at = ? WHERE user_id = ?",
+            (now, normalized_user_id),
+        )
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO subscription_events (
+                event_id, event_type, user_id, token, payload_json, created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                f"manual_cancel:{normalized_user_id}:{now}:{int(updated_by or 0)}",
+                "manual_cancel",
+                normalized_user_id,
+                "",
+                json.dumps({"source": "manual", "user_id": normalized_user_id, "updated_by": int(updated_by or 0)}, ensure_ascii=False),
+                now,
+            ),
+        )
+        conn.commit()
+    return get_subscription(normalized_user_id)
+
+
 def _text(value: Any) -> str:
     return str(value or "").strip()
 
