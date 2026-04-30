@@ -60,7 +60,7 @@ _SEARCH_CACHE: dict[str, tuple[float, list]] = {}
 _DETAIL_CACHE: dict[str, tuple[float, dict]] = {}
 _EPISODES_CACHE: dict[str, tuple[float, list]] = {}
 
-PLAYER_SERVER_ORDER = ("streamtape",)
+PLAYER_SERVER_ORDER = ("byse", "mixdrop", "doodstream", "streamtape")
 PLAYER_SERVER_LABELS = {
     "byse": "Byse",
     "doodstream": "DoodStream",
@@ -989,7 +989,7 @@ def _extract_player_links(html_text: str) -> dict:
 
     for vid_id, server in re.findall(r"C_Video\('(\d+)','([\w-]+)'\)", html_text):
         normalized = _normalize_server_name(server)
-        if normalized != "streamtape":
+        if normalized not in PLAYER_SERVER_ORDER:
             continue
         if normalized in player_candidates:
             continue
@@ -1001,7 +1001,7 @@ def _extract_player_links(html_text: str) -> dict:
         }
 
     preferred_player_url = ""
-    candidate = player_candidates.get("streamtape")
+    candidate = next((player_candidates.get(server) for server in PLAYER_SERVER_ORDER if player_candidates.get(server)), None)
     if candidate:
         preferred_player_url = candidate["embed_url"]
 
@@ -1016,12 +1016,11 @@ def _extract_player_links(html_text: str) -> dict:
             normalized = _normalize_server_name(match.group(1))
         else:
             text = link.get_text(" ", strip=True).lower()
-            if "streamtape" in text:
-                normalized = "streamtape"
-            else:
+            normalized = next((server for server in PLAYER_SERVER_ORDER if server in text), "")
+            if not normalized:
                 continue
 
-        if normalized != "streamtape":
+        if normalized not in PLAYER_SERVER_ORDER:
             continue
         downloads[normalized] = {
             "label": _server_label(normalized),
@@ -1031,10 +1030,10 @@ def _extract_player_links(html_text: str) -> dict:
     token_match = re.search(r"token=([A-Za-z0-9]+)", html_text)
     token = token_match.group(1) if token_match else ""
     if token:
-        candidate = player_candidates.get("streamtape")
-        if candidate and "streamtape" not in downloads:
-            downloads["streamtape"] = {
-                "label": _server_label("streamtape"),
+        candidate = next((player_candidates.get(server) for server in PLAYER_SERVER_ORDER if player_candidates.get(server)), None)
+        if candidate and candidate["server"] not in downloads:
+            downloads[candidate["server"]] = {
+                "label": _server_label(candidate["server"]),
                 "url": (
                     f"{BASE_URL}/e/redirect.php"
                     f"?sv={candidate['source_server']}&id={candidate['video_id']}&token={token}"
