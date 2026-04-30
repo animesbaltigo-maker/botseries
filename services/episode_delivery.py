@@ -18,6 +18,10 @@ from telegram import Bot
 from config import (
     DATA_DIR,
     EPISODE_CACHE_CHAT_ID,
+    TELETHON_UPLOAD_MAX_MB,
+    VIDEO_DOWNLOAD_MAX_MB,
+    VIDEO_DOWNLOAD_PROTECT_CONTENT,
+    VIDEO_UPLOAD_MAX_MB,
     VIDEO_SEND_CONCURRENCY,
     VIDEO_SEND_ENABLED,
     VIDEO_SEND_MAX_MB,
@@ -25,10 +29,13 @@ from config import (
     VIDEO_TMP_DIR,
 )
 from core.http_client import get_http_client
+from core.telethon_uploader import send_file_with_telethon, telethon_configured
 
 LOGGER = logging.getLogger(__name__)
 DB_PATH = Path(DATA_DIR) / "episode_cache.sqlite3"
-MAX_BYTES = int(VIDEO_SEND_MAX_MB) * 1024 * 1024
+MAX_BYTES = int(VIDEO_DOWNLOAD_MAX_MB or VIDEO_SEND_MAX_MB) * 1024 * 1024
+BOT_UPLOAD_MAX_BYTES = int(VIDEO_UPLOAD_MAX_MB) * 1024 * 1024
+TELETHON_MAX_BYTES = int(TELETHON_UPLOAD_MAX_MB or VIDEO_SEND_MAX_MB) * 1024 * 1024
 
 _DELIVERY_SEMAPHORE: asyncio.Semaphore | None = None
 _PENDING_LOCK = asyncio.Lock()
@@ -378,6 +385,30 @@ async def _upload_video(
     reporter_task = asyncio.create_task(_report_upload())
 
     try:
+        if upload_total > BOT_UPLOAD_MAX_BYTES:
+            if not telethon_configured():
+                raise RuntimeError(
+                    "Arquivo grande demais para o Bot API oficial. "
+                    "Preencha API_ID e API_HASH no .env para ativar o uploader Telethon."
+                )
+            if upload_total > TELETHON_MAX_BYTES:
+                raise RuntimeError(
+                    f"Arquivo maior que o limite Telethon configurado ({TELETHON_UPLOAD_MAX_MB} MB)."
+                )
+
+            await bot.send_chat_action(chat_id=chat_id, action="upload_video")
+            ok = await send_file_with_telethon(
+                int(chat_id),
+                tmp_path,
+                _safe_caption(request.caption),
+                as_video=True,
+                progress_callback=lambda current, total: _mark_upload(current),
+                protect_content=VIDEO_DOWNLOAD_PROTECT_CONTENT,
+            )
+            if not ok:
+                raise RuntimeError("O uploader Telethon nao conseguiu iniciar. Confira API_ID e API_HASH.")
+            return None, download_meta
+
         await bot.send_chat_action(chat_id=chat_id, action="upload_video")
         message = await bot.send_video(
             chat_id=chat_id,
@@ -395,7 +426,7 @@ async def _upload_video(
         text = str(exc or "").strip().lower()
         if "entity too large" in text or "file is too big" in text or "too large" in text:
             raise RuntimeError(
-                f"Telegram recusou o upload. O arquivo excede o limite configurado/permitido ({VIDEO_SEND_MAX_MB} MB)."
+                f"Telegram recusou o upload. O arquivo excede o limite configurado/permitido ({VIDEO_UPLOAD_MAX_MB} MB)."
             ) from exc
         raise
     finally:
@@ -490,7 +521,7 @@ async def _materialize_record(
     *,
     progress_callback: ProgressCallback | None = None,
 ) -> tuple[dict[str, Any], bool]:
-    cache_chat_id = _chat_target(EPISODE_CACHE_CHAT_ID)
+    cache_chat_id = None if telethon_configured() else _chat_target(EPISODE_CACHE_CHAT_ID)
     upload_target = cache_chat_id if cache_chat_id is not None else target_chat_id
     message, download_meta = await _upload_video(
         bot,
@@ -498,6 +529,8 @@ async def _materialize_record(
         request,
         progress_callback=progress_callback,
     )
+    if message is None:
+        return {}, True
     record = _record_from_message(
         message,
         request,
@@ -552,11 +585,16 @@ async def deliver_video_request(
                     request,
                     progress_callback=progress_callback,
                 )
-                store_cached_video(cache_key, record)
+                if record:
+                    store_cached_video(cache_key, record)
                 if not future.done():
-                    future.set_result(record)
+                    future.set_result(
+                        record
+                        if record
+                        else {"__error__": "Esse video grande foi enviado diretamente e nao ficou em cache."}
+                    )
 
-                if not owner_already_received:
+                if record and not owner_already_received:
                     await _send_from_cached_record(
                         bot,
                         chat_id,
