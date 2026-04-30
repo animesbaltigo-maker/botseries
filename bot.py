@@ -25,6 +25,7 @@ from config import (
 )
 from core.http_client import close_http_client
 from core.telethon_uploader import start_telethon_uploader, stop_telethon_uploader
+from core.video_download_queue import start_video_download_workers, stop_video_download_workers
 from handlers.bingo import bingo
 from handlers.bingo_admin import resetbingo, sortear, startbingo, startbingo_auto
 from handlers.broadcast import broadcast_callbacks, broadcast_command, broadcast_message_router
@@ -69,6 +70,7 @@ def _configure_logging() -> None:
 
 
 async def post_shutdown(app: Application) -> None:
+    await stop_video_download_workers(app)
     await stop_telethon_uploader()
     await close_catalog_client()
     await close_http_client()
@@ -76,6 +78,7 @@ async def post_shutdown(app: Application) -> None:
 
 async def post_init(app: Application) -> None:
     await start_telethon_uploader()
+    await start_video_download_workers(app)
 
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
