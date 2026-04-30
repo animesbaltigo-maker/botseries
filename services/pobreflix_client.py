@@ -67,6 +67,7 @@ PLAYER_SERVER_LABELS = {
     "streamtape": "StreamTape",
     "mixdrop": "MixDrop",
 }
+PLAYER_RESOLVE_TIMEOUT = 12.0
 
 CACHE_TTL_SEARCH  = 60 * 10   # 10 min
 CACHE_TTL_DETAIL  = 60 * 30   # 30 min
@@ -1364,34 +1365,63 @@ async def resolve_player_links(player_links: dict | None, referer: str = "") -> 
     downloads = player_links.get("downloads") or {}
     resolved_downloads = {}
 
-    for server in PLAYER_SERVER_ORDER:
-        item = downloads.get(server)
-        if not item:
-            continue
-
+    async def resolve_download(server: str, item: dict) -> tuple[str, dict] | None:
         raw_url = str(item.get("url") or "").strip()
         if not raw_url:
-            continue
-
-        resolved_url = await _resolve_player_target(raw_url, referer=referer or raw_url)
-        resolved_downloads[server] = {
+            return None
+        try:
+            resolved_url = await asyncio.wait_for(
+                _resolve_player_target(raw_url, referer=referer or raw_url),
+                timeout=PLAYER_RESOLVE_TIMEOUT,
+            )
+        except Exception:
+            resolved_url = raw_url
+        return server, {
             "label": str(item.get("label") or _server_label(server)).strip(),
             "url": resolved_url or raw_url,
         }
 
+    tasks = []
+    for server in PLAYER_SERVER_ORDER:
+        item = downloads.get(server)
+        if not item:
+            continue
+        if not isinstance(item, dict):
+            continue
+        tasks.append(resolve_download(server, item))
+
+    if tasks:
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        for result in results:
+            if isinstance(result, Exception) or not result:
+                continue
+            server, item = result
+            resolved_downloads[server] = item
+
+    resolved_player_url = ""
+    for server in PLAYER_SERVER_ORDER:
+        item = resolved_downloads.get(server)
+        if item and _is_direct_video_url(str(item.get("url") or "")):
+            resolved_player_url = item["url"]
+            break
+
     raw_player_url = str(player_links.get("player_url") or "").strip()
-    resolved_player_url = (
-        await _resolve_player_target(raw_player_url, referer=referer or raw_player_url)
-        if raw_player_url
-        else ""
-    )
+    if not resolved_player_url and raw_player_url:
+        try:
+            resolved_player_url = await asyncio.wait_for(
+                _resolve_player_target(raw_player_url, referer=referer or raw_player_url),
+                timeout=PLAYER_RESOLVE_TIMEOUT,
+            )
+        except Exception:
+            resolved_player_url = raw_player_url
 
     if not resolved_player_url or _is_source_site_url(resolved_player_url):
         for server in PLAYER_SERVER_ORDER:
             item = resolved_downloads.get(server)
-            if item and item.get("url"):
-                resolved_player_url = item["url"]
-                break
+            if not item or not item.get("url"):
+                continue
+            resolved_player_url = item["url"]
+            break
 
     return {
         "player_url": resolved_player_url or raw_player_url,
