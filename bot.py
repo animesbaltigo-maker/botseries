@@ -24,6 +24,7 @@ from config import (
     LOG_DIR,
 )
 from core.http_client import close_http_client
+from core.telethon_uploader import start_telethon_uploader, stop_telethon_uploader
 from handlers.bingo import bingo
 from handlers.bingo_admin import resetbingo, sortear, startbingo, startbingo_auto
 from handlers.broadcast import broadcast_callbacks, broadcast_command, broadcast_message_router
@@ -68,8 +69,13 @@ def _configure_logging() -> None:
 
 
 async def post_shutdown(app: Application) -> None:
+    await stop_telethon_uploader()
     await close_catalog_client()
     await close_http_client()
+
+
+async def post_init(app: Application) -> None:
+    await start_telethon_uploader()
 
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -117,6 +123,7 @@ def main() -> None:
         .connect_timeout(BOT_API_CONNECT_TIMEOUT)
         .read_timeout(BOT_API_READ_TIMEOUT)
         .write_timeout(BOT_API_WRITE_TIMEOUT)
+        .post_init(post_init)
         .post_shutdown(post_shutdown)
         .build()
     )
