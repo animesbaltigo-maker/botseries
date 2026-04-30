@@ -389,20 +389,87 @@ async def _show_watch_blocked(query, reply_markup) -> None:
     await _send_watch_block_message(query)
 
 
+def _human_bytes(value: int | float | None) -> str:
+    size = float(value or 0)
+    if size <= 0:
+        return "0 MB"
+    mb = size / (1024 * 1024)
+    if mb < 1024:
+        return f"{mb:.1f} MB"
+    return f"{mb / 1024:.2f} GB"
+
+
+def _delivery_progress_text(payload: dict) -> str:
+    stage = str((payload or {}).get("stage") or "").strip()
+    if stage == "downloading":
+        current = int((payload or {}).get("download_bytes") or 0)
+        total = int((payload or {}).get("download_total") or 0)
+        pct = int((current / max(total, 1)) * 100) if total else 0
+        total_text = _human_bytes(total) if total else "calculando"
+        return (
+            "📥 <b>Baixando video</b>\n\n"
+            f"<b>Progresso:</b> {pct}%\n"
+            f"<code>{_human_bytes(current)} / {total_text}</code>"
+        )
+    if stage == "uploading":
+        current = int((payload or {}).get("upload_bytes") or 0)
+        total = int((payload or {}).get("upload_total") or 0)
+        pct = int((current / max(total, 1)) * 100) if total else 0
+        return (
+            "📤 <b>Enviando video</b>\n\n"
+            f"<b>Progresso:</b> {pct}%\n"
+            f"<code>{_human_bytes(current)} / {_human_bytes(total)}</code>"
+        )
+    if stage == "cached":
+        return "♻️ <b>Enviando video salvo...</b>"
+    if stage == "done":
+        return "✅ <b>Video enviado.</b>"
+    return "⏳ <b>Preparando video...</b>"
+
+
 async def _finish_video_delivery(message, request, reply_markup) -> None:
     if not message:
         return
 
+    status_message = None
+    last_progress_update = 0.0
+
+    async def progress_callback(payload: dict) -> None:
+        nonlocal status_message, last_progress_update
+        now = _now()
+        stage = str((payload or {}).get("stage") or "")
+        if stage not in {"done", "cached"} and now - last_progress_update < 2.0:
+            return
+        last_progress_update = now
+
+        try:
+            text = _delivery_progress_text(payload)
+            if status_message is None:
+                status_message = await message.reply_text(text, parse_mode="HTML")
+            else:
+                await status_message.edit_text(text, parse_mode="HTML")
+        except Exception:
+            pass
+
     try:
-        await deliver_video_request(message.get_bot(), message.chat.id, request)
+        status_message = await message.reply_text("⏳ <b>Preparando video...</b>", parse_mode="HTML")
+        await deliver_video_request(
+            message.get_bot(),
+            message.chat.id,
+            request,
+            progress_callback=progress_callback,
+        )
     except Exception as exc:
         error_text = html.escape(str(exc or "Não consegui enviar esse vídeo agora.").strip())
         try:
-            await message.reply_text(
+            target_text = (
                 "❌ <b>Não consegui enviar esse vídeo no Telegram agora.</b>\n\n"
                 f"<i>{error_text}</i>",
-                parse_mode="HTML",
             )
+            if status_message is not None:
+                await status_message.edit_text(target_text, parse_mode="HTML")
+            else:
+                await message.reply_text(target_text, parse_mode="HTML")
         except Exception:
             pass
     finally:
@@ -738,7 +805,6 @@ def _player_keyboard(
     watch_label: str = "▶️ Assistir",
 ) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
-    rows.append([InlineKeyboardButton(watch_label, url=player_url)])
 
     if episode_idx is not None:
         rows.append([InlineKeyboardButton("📥 Baixar no Telegram", callback_data=f"pb_dl_ep|{session_token}|{season}|{episode_idx}")])
