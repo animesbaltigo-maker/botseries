@@ -78,10 +78,18 @@ def _normalize_telegram_url(value: str) -> str:
 
 
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8617687497:AAEY9ZYQ9Bh57EeL7t5a8mn6nSMqhgYnvH8").strip()
-API_ID = _env_int("API_ID", 39909232)
-API_HASH = os.getenv("API_HASH", "af7a08316fb157de8396ce7d38bae2d5").strip()
 BOT_USERNAME = os.getenv("BOT_USERNAME", "SeriesBrazilBot").strip().lstrip("@")
 BOT_BRAND = os.getenv("BOT_BRAND", "Series Brazil Bot").strip() or "Series Brazil Bot"
+API_ID = (
+    _env_int("API_ID", 0)
+    or _env_int("TELEGRAM_API_ID", 0)
+    or _env_int("TG_API_ID", 0)
+)
+API_HASH = (
+    os.getenv("API_HASH", "").strip()
+    or os.getenv("TELEGRAM_API_HASH", "").strip()
+    or os.getenv("TG_API_HASH", "").strip()
+)
 
 SOURCE_SITE_BASE = os.getenv("SOURCE_SITE_BASE", "https://www.pobreflixtv.hair").strip().rstrip("/")
 
