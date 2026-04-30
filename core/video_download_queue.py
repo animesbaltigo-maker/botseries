@@ -24,7 +24,7 @@ from config import (
     VIDEO_DOWNLOAD_WORKERS,
     VIDEO_UPLOAD_MAX_MB,
 )
-from core.telethon_uploader import send_file_with_telethon, telethon_configured
+from core.telethon_uploader import last_telethon_error, send_file_with_telethon, telethon_configured
 
 HEADERS = {
     "User-Agent": (
@@ -309,10 +309,18 @@ async def _send_video_safe(bot, chat_id: int, path: Path, caption: str, progress
         if sent:
             return True
         if size > UPLOAD_MAX_BYTES:
-            raise RuntimeError("Arquivo grande demais para Bot API e o uploader Telethon nao conseguiu iniciar.")
+            reason = last_telethon_error() or "erro desconhecido"
+            raise RuntimeError(
+                "Arquivo grande demais para Bot API e o uploader Telethon nao conseguiu iniciar.\n"
+                f"Motivo: {reason}"
+            )
 
     if size > UPLOAD_MAX_BYTES:
-        raise RuntimeError("Arquivo grande demais para Bot API e o uploader Telethon nao esta configurado.")
+        reason = last_telethon_error() or "API_ID/API_HASH ausentes"
+        raise RuntimeError(
+            "Arquivo grande demais para Bot API e o uploader Telethon nao esta configurado.\n"
+            f"Motivo: {reason}"
+        )
 
     try:
         with open(path, "rb") as file:
