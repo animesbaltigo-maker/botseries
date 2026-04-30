@@ -36,6 +36,7 @@ from handlers.help import ajuda
 from handlers.inline import inline_query
 from handlers.metricas import metricas, metricas_limpar
 from handlers.novoseps import auto_post_new_eps_job, postnovoseps
+from handlers.offline_paywall import planos
 from handlers.pedido import pedido
 from handlers.postanime import postanime
 from handlers.postfilmes import postfilmes
@@ -48,10 +49,12 @@ from services.metrics import init_metrics_db
 from services.catalog_client import close_catalog_client
 from services.episode_delivery import init_episode_delivery_db
 from services.referral_db import init_referral_db
+from services.subscriptions import init_subscriptions_db
 
 init_metrics_db()
 init_referral_db()
 init_episode_delivery_db()
+init_subscriptions_db()
 
 LOGGER = logging.getLogger(__name__)
 
@@ -153,6 +156,8 @@ def main() -> None:
     app.add_handler(CommandHandler("resetbingo", resetbingo))
     app.add_handler(CommandHandler("metricas", metricas))
     app.add_handler(CommandHandler("metricaslimpar", metricas_limpar))
+    app.add_handler(CommandHandler("planos", planos))
+    app.add_handler(CommandHandler("assinar", planos))
     app.add_handler(CommandHandler("bloqueareps", bloqueareps))
     app.add_handler(CommandHandler("liberaeps", liberaeps))
     app.add_handler(CommandHandler("pedido", pedido))
@@ -162,7 +167,7 @@ def main() -> None:
 
     app.add_handler(CallbackQueryHandler(broadcast_callbacks, pattern=r"^bc\|"))
     app.add_handler(CallbackQueryHandler(referral_button, pattern=r"^noop_indicar$"))
-    app.add_handler(CallbackQueryHandler(callbacks, pattern=r"^(pb_|noop$)"))
+    app.add_handler(CallbackQueryHandler(callbacks, pattern=r"^(pb_|subcheck$|noop$)"))
 
     app.add_handler(
         MessageHandler(filters.ALL & ~filters.COMMAND, broadcast_message_router),
