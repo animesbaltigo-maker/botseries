@@ -1,5 +1,4 @@
-import logging
-from pathlib import Path
+import asyncio
 
 from telegram import Update
 from telegram.ext import (
@@ -12,100 +11,97 @@ from telegram.ext import (
     filters,
 )
 
-from config import (
-    BOT_API_CONNECTION_POOL,
-    BOT_API_CONNECT_TIMEOUT,
-    BOT_API_MAX_CONCURRENT_UPDATES,
-    BOT_API_POOL_TIMEOUT,
-    BOT_API_READ_TIMEOUT,
-    BOT_API_WRITE_TIMEOUT,
-    BOT_BRAND,
-    BOT_TOKEN,
-    LOG_DIR,
-)
+from config import BOT_TOKEN, CACHE_CLEANUP_INTERVAL_SECONDS, CACHE_CLEANUP_STARTUP
+from core.epub_queue import start_epub_workers, stop_epub_workers
 from core.http_client import close_http_client
-from core.telethon_uploader import start_telethon_uploader, stop_telethon_uploader
-from core.video_download_queue import start_video_download_workers, stop_video_download_workers
-from handlers.bingo import bingo
-from handlers.bingo_admin import resetbingo, sortear, startbingo, startbingo_auto
-from handlers.broadcast import broadcast_callbacks, broadcast_command, broadcast_message_router
+from core.pdf_queue import start_pdf_workers, stop_pdf_workers
+from handlers.broadcast import (
+    broadcast_callbacks,
+    broadcast_command,
+    broadcast_message_router,
+)
 from handlers.callbacks import callbacks
-from handlers.discover import aleatorio, lancamentos
-from handlers.group_ai import esquecer_handler, group_ai_handler
 from handlers.help import ajuda
 from handlers.inline import inline_query
 from handlers.metricas import metricas, metricas_limpar
 from handlers.novoseps import auto_post_new_eps_job, postnovoseps
-from handlers.offline_paywall import planos
-from handlers.pedido import pedido
-from handlers.postanime import postanime
-from handlers.postfilmes import postfilmes
+from handlers.offline_admin import offlineadd, offlinecheck, offlinerevoke
+from handlers.pdf_bulk import pdfmanga
+from handlers.plan import plano
 from handlers.referral import indicacoes, referral_button
 from handlers.referral_admin import auto_referral_check_job, refstats
+from handlers.profile import mperfil
 from handlers.search import buscar
 from handlers.start import start
-from handlers.watch_admin import bloqueareps, liberaeps
+from services.catalog_client import schedule_warm_catalog_cache, warm_catalog_cache
+from services.cache_cleanup import cleanup_cache_once
 from services.metrics import init_metrics_db
-from services.catalog_client import close_catalog_client
-from services.episode_delivery import init_episode_delivery_db
+from services.offline_access import init_offline_access_db
 from services.referral_db import init_referral_db
-from services.subscriptions import init_subscriptions_db
+from services.affiliate_db import init_affiliate_db, release_due_commissions
+from handlers.postmanga import postmanga, postallmangas
 
 init_metrics_db()
 init_referral_db()
-init_episode_delivery_db()
-init_subscriptions_db()
+init_offline_access_db()
+init_affiliate_db()
 
-LOGGER = logging.getLogger(__name__)
-
-
-def _configure_logging() -> None:
-    LOG_DIR.mkdir(parents=True, exist_ok=True)
-    log_path = Path(LOG_DIR) / "bot.log"
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
-        handlers=[
-            logging.StreamHandler(),
-            logging.FileHandler(log_path, encoding="utf-8"),
-        ],
-    )
-
-
-async def post_shutdown(app: Application) -> None:
-    await stop_video_download_workers(app)
-    await stop_telethon_uploader()
-    await close_catalog_client()
-    await close_http_client()
+MAX_CONCURRENT_UPDATES = 128
+BOT_API_CONNECTION_POOL = 64
+BOT_API_POOL_TIMEOUT = 30.0
+BOT_API_CONNECT_TIMEOUT = 10.0
+BOT_API_READ_TIMEOUT = 25.0
+BOT_API_WRITE_TIMEOUT = 25.0
 
 
 async def post_init(app: Application) -> None:
-    await start_telethon_uploader()
-    await start_video_download_workers(app)
+    await start_pdf_workers(app)
+    await start_epub_workers(app)
+    schedule_warm_catalog_cache()
+    if CACHE_CLEANUP_STARTUP:
+        asyncio.create_task(cleanup_cache_once())
+
+
+async def post_shutdown(app: Application) -> None:
+    await stop_epub_workers(app)
+    await stop_pdf_workers(app)
+    await close_http_client()
 
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
-    LOGGER.exception("Erro nao tratado no bot", exc_info=context.error)
+    print("ERRO:", repr(context.error))
     try:
         if isinstance(update, Update) and update.effective_message:
-            await update.effective_message.reply_text(
-                "❌ <b>Ocorreu um erro ao processar sua solicitacao.</b>",
-                parse_mode="HTML",
-            )
+            await update.effective_message.reply_text("Ocorreu um erro ao processar sua solicitacao.")
     except Exception:
         pass
 
 
+async def warm_catalog_job(context: ContextTypes.DEFAULT_TYPE) -> None:
+    await warm_catalog_cache()
+
+
+async def cache_cleanup_job(context: ContextTypes.DEFAULT_TYPE) -> None:
+    await cleanup_cache_once()
+
+
+async def affiliate_release_job(context: ContextTypes.DEFAULT_TYPE) -> None:
+    try:
+        release_due_commissions()
+    except Exception as error:
+        print("ERRO AFFILIATE RELEASE:", repr(error))
+
+
 def _register_jobs(app: Application) -> None:
     if not app.job_queue:
-        LOGGER.warning("JobQueue nao disponivel.")
+        print("JobQueue nao disponivel. Instale python-telegram-bot[job-queue]==22.6")
         return
 
     app.job_queue.run_repeating(
         auto_post_new_eps_job,
         interval=600,
-        first=30,
-        name="auto_post",
+        first=20,
+        name="auto_post_new_chapters",
     )
     app.job_queue.run_repeating(
         auto_referral_check_job,
@@ -113,17 +109,34 @@ def _register_jobs(app: Application) -> None:
         first=60,
         name="auto_referral_check",
     )
+    app.job_queue.run_repeating(
+        warm_catalog_job,
+        interval=600,
+        first=5,
+        name="warm_catalog_cache",
+    )
+    app.job_queue.run_repeating(
+        cache_cleanup_job,
+        interval=max(300, CACHE_CLEANUP_INTERVAL_SECONDS),
+        first=120,
+        name="cache_cleanup",
+    )
+    app.job_queue.run_repeating(
+        affiliate_release_job,
+        interval=1800,
+        first=90,
+        name="affiliate_release",
+    )
 
 
 def main() -> None:
-    _configure_logging()
     if not BOT_TOKEN:
-        raise RuntimeError("Configure BOT_TOKEN no arquivo .env.")
+        raise RuntimeError("Configure BOT_TOKEN nas variaveis de ambiente.")
 
     app = (
         Application.builder()
         .token(BOT_TOKEN)
-        .concurrent_updates(BOT_API_MAX_CONCURRENT_UPDATES)
+        .concurrent_updates(MAX_CONCURRENT_UPDATES)
         .connection_pool_size(BOT_API_CONNECTION_POOL)
         .pool_timeout(BOT_API_POOL_TIMEOUT)
         .connect_timeout(BOT_API_CONNECT_TIMEOUT)
@@ -136,52 +149,39 @@ def main() -> None:
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("buscar", buscar))
-    app.add_handler(CommandHandler("lancamentos", lancamentos))
-    app.add_handler(CommandHandler("aleatorio", aleatorio))
     app.add_handler(CommandHandler("ajuda", ajuda))
-
-    app.add_handler(CommandHandler("postanime", postanime))
-    app.add_handler(CommandHandler("postserie", postanime))
-    app.add_handler(CommandHandler("postfilme", postfilmes))
-    app.add_handler(CommandHandler("postfilmes", postfilmes))
     app.add_handler(CommandHandler("postnovoseps", postnovoseps))
-
+    app.add_handler(CommandHandler("postnovoscaps", postnovoseps))
+    app.add_handler(CommandHandler("postmanga", postmanga))
+    app.add_handler(CommandHandler("pdfmanga", pdfmanga))
+    app.add_handler(CommandHandler("pdfall", pdfmanga))
+    app.add_handler(CommandHandler("plano", plano))
+    app.add_handler(CommandHandler("offlineadd", offlineadd))
+    app.add_handler(CommandHandler("offlinecheck", offlinecheck))
+    app.add_handler(CommandHandler("offlinerevoke", offlinerevoke))
     app.add_handler(CommandHandler("broadcast", broadcast_command))
     app.add_handler(CommandHandler("indicacoes", indicacoes))
     app.add_handler(CommandHandler("refstats", refstats))
-    app.add_handler(CommandHandler("bingo", bingo))
-    app.add_handler(CommandHandler("startbingo", startbingo))
-    app.add_handler(CommandHandler("sortear", sortear))
-    app.add_handler(CommandHandler("autobingo", startbingo_auto))
-    app.add_handler(CommandHandler("resetbingo", resetbingo))
     app.add_handler(CommandHandler("metricas", metricas))
     app.add_handler(CommandHandler("metricaslimpar", metricas_limpar))
-    app.add_handler(CommandHandler("planos", planos))
-    app.add_handler(CommandHandler("assinar", planos))
-    app.add_handler(CommandHandler("bloqueareps", bloqueareps))
-    app.add_handler(CommandHandler("liberaeps", liberaeps))
-    app.add_handler(CommandHandler("pedido", pedido))
-    app.add_handler(CommandHandler("esquecer", esquecer_handler))
-
+    app.add_handler(CommandHandler("mperfil", mperfil))
     app.add_handler(InlineQueryHandler(inline_query))
+    app.add_handler(CommandHandler("postallmangas", postallmangas))
+    app.add_handler(CommandHandler("posttodosmangas", postallmangas))
 
     app.add_handler(CallbackQueryHandler(broadcast_callbacks, pattern=r"^bc\|"))
     app.add_handler(CallbackQueryHandler(referral_button, pattern=r"^noop_indicar$"))
-    app.add_handler(CallbackQueryHandler(callbacks, pattern=r"^(pb_|subcheck$|noop$)"))
+    app.add_handler(CallbackQueryHandler(callbacks, pattern=r"^mb\|"))
 
     app.add_handler(
         MessageHandler(filters.ALL & ~filters.COMMAND, broadcast_message_router),
         group=99,
     )
-    app.add_handler(
-        MessageHandler(filters.TEXT & ~filters.COMMAND, group_ai_handler),
-        group=100,
-    )
 
     _register_jobs(app)
     app.add_error_handler(error_handler)
 
-    LOGGER.info("%s rodando...", BOT_BRAND)
+    print("Bot de mangas rodando...")
     app.run_polling(drop_pending_updates=True)
 
 
