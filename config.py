@@ -77,7 +77,9 @@ def _normalize_telegram_url(value: str) -> str:
     return f"https://t.me/{raw.lstrip('/')}"
 
 
-BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
+BOT_TOKEN = os.getenv("BOT_TOKEN", "8617687497:AAEY9ZYQ9Bh57EeL7t5a8mn6nSMqhgYnvH8").strip()
+API_ID = _env_int("API_ID", 39909232)
+API_HASH = os.getenv("API_HASH", "af7a08316fb157de8396ce7d38bae2d5").strip()
 BOT_USERNAME = os.getenv("BOT_USERNAME", "SeriesBrazilBot").strip().lstrip("@")
 BOT_BRAND = os.getenv("BOT_BRAND", "Series Brazil Bot").strip() or "Series Brazil Bot"
 
@@ -147,7 +149,15 @@ SCRAPER_CONNECTION_LIMIT = _env_int("SCRAPER_CONNECTION_LIMIT", 256)
 
 VIDEO_SEND_ENABLED = _env_bool("VIDEO_SEND_ENABLED", True)
 VIDEO_SEND_CONCURRENCY = _env_int("VIDEO_SEND_CONCURRENCY", 1)
-VIDEO_SEND_MAX_MB = _env_int("VIDEO_SEND_MAX_MB", 50)
+VIDEO_SEND_MAX_MB = _env_int("VIDEO_SEND_MAX_MB", 1900)
+VIDEO_DOWNLOAD_MAX_MB = _env_int("VIDEO_DOWNLOAD_MAX_MB", VIDEO_SEND_MAX_MB)
+VIDEO_UPLOAD_MAX_MB = _env_int("VIDEO_UPLOAD_MAX_MB", 49)
+TELETHON_UPLOAD_MAX_MB = _env_int("TELETHON_UPLOAD_MAX_MB", VIDEO_SEND_MAX_MB)
+TELETHON_PARALLEL_UPLOAD = _env_bool("TELETHON_PARALLEL_UPLOAD", True)
+TELETHON_PARALLEL_UPLOAD_THRESHOLD_MB = _env_int("TELETHON_PARALLEL_UPLOAD_THRESHOLD_MB", 20)
+TELETHON_PARALLEL_UPLOAD_WORKERS = _env_int("TELETHON_PARALLEL_UPLOAD_WORKERS", 8)
+TELETHON_SESSION_NAME = os.getenv("TELETHON_SESSION_NAME", str(DATA_DIR / "pobreflix_uploader_bot")).strip()
+VIDEO_DOWNLOAD_PROTECT_CONTENT = _env_bool("VIDEO_DOWNLOAD_PROTECT_CONTENT", True)
 VIDEO_SEND_TIMEOUT = _env_int("VIDEO_SEND_TIMEOUT", 3600)
 VIDEO_TMP_DIR = Path(os.getenv("VIDEO_TMP_DIR", str(DATA_DIR / "video_tmp")).strip())
 VIDEO_TMP_DIR.mkdir(parents=True, exist_ok=True)
