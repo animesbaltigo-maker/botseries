@@ -612,6 +612,19 @@ def _episode_display_label(episode: dict, fallback_index: int) -> str:
     return f"Episódio {fallback_index + 1}"
 
 
+def _episode_number_value(episode: dict, fallback_index: int) -> int:
+    number = str((episode or {}).get("episode") or "").strip()
+    if not number:
+        label = str((episode or {}).get("label") or "").strip()
+        match = re.search(r"(\d+)", label)
+        if match:
+            number = match.group(1)
+
+    if number.isdigit():
+        return int(number)
+    return fallback_index + 1
+
+
 def _episode_button_label(episode: dict, fallback_index: int) -> str:
     number = str(episode.get("episode") or "").strip()
     if not number:
