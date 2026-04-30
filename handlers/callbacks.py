@@ -464,7 +464,7 @@ async def _finish_video_delivery(message, request, reply_markup) -> None:
         try:
             target_text = (
                 "❌ <b>Não consegui enviar esse vídeo no Telegram agora.</b>\n\n"
-                f"<i>{error_text}</i>",
+                f"<i>{error_text}</i>"
             )
             if status_message is not None:
                 await status_message.edit_text(target_text, parse_mode="HTML")
