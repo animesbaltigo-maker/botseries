@@ -78,18 +78,24 @@ def _normalize_telegram_url(value: str) -> str:
 
 
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8617687497:AAEY9ZYQ9Bh57EeL7t5a8mn6nSMqhgYnvH8").strip()
-BOT_USERNAME = os.getenv("BOT_USERNAME", "SeriesBrazilBot").strip().lstrip("@")
-BOT_BRAND = os.getenv("BOT_BRAND", "Series Brazil Bot").strip() or "Series Brazil Bot"
 API_ID = (
     _env_int("API_ID", 0)
+    or _env_int("USERBOT_API_ID", 0)
+    or _env_int("USERBOT_APP_ID", 0)
+    or _env_int("TELETHON_API_ID", 0)
     or _env_int("TELEGRAM_API_ID", 0)
     or _env_int("TG_API_ID", 0)
 )
 API_HASH = (
     os.getenv("API_HASH", "").strip()
+    or os.getenv("USERBOT_API_HASH", "").strip()
+    or os.getenv("USERBOT_APP_HASH", "").strip()
+    or os.getenv("TELETHON_API_HASH", "").strip()
     or os.getenv("TELEGRAM_API_HASH", "").strip()
     or os.getenv("TG_API_HASH", "").strip()
 )
+BOT_USERNAME = os.getenv("BOT_USERNAME", "SeriesBrazilBot").strip().lstrip("@")
+BOT_BRAND = os.getenv("BOT_BRAND", "Series Brazil Bot").strip() or "Series Brazil Bot"
 
 SOURCE_SITE_BASE = os.getenv("SOURCE_SITE_BASE", "https://www.pobreflixtv.hair").strip().rstrip("/")
 
@@ -111,14 +117,14 @@ STICKER_DIVISOR = os.getenv(
 
 ADMIN_IDS = [
     int(value.strip())
-    for value in os.getenv("ADMIN_IDS", "1852596083").split(",")
+    for value in os.getenv("ADMIN_IDS", "").split(",")
     if value.strip().isdigit()
 ]
 
 
 ADMIN_IDS = {
     int(x.strip())
-    for x in os.getenv("ADMIN_IDS", "1852596083").split(",")
+    for x in os.getenv("ADMIN_IDS", "").split(",")
     if x.strip().isdigit()
 }
 
@@ -159,19 +165,40 @@ VIDEO_SEND_ENABLED = _env_bool("VIDEO_SEND_ENABLED", True)
 VIDEO_SEND_CONCURRENCY = _env_int("VIDEO_SEND_CONCURRENCY", 1)
 VIDEO_SEND_MAX_MB = _env_int("VIDEO_SEND_MAX_MB", 1900)
 VIDEO_DOWNLOAD_MAX_MB = _env_int("VIDEO_DOWNLOAD_MAX_MB", VIDEO_SEND_MAX_MB)
+VIDEO_DOWNLOAD_QUEUE_LIMIT = _env_int("VIDEO_DOWNLOAD_QUEUE_LIMIT", 20)
+VIDEO_DOWNLOAD_WORKERS = _env_int("VIDEO_DOWNLOAD_WORKERS", 2)
+VIDEO_DOWNLOAD_CHUNK_MB = _env_int("VIDEO_DOWNLOAD_CHUNK_MB", 8)
+VIDEO_DOWNLOAD_TRUST_ENV = _env_bool("VIDEO_DOWNLOAD_TRUST_ENV", False)
+VIDEO_DOWNLOAD_CACHE_DIR = os.getenv("VIDEO_DOWNLOAD_CACHE_DIR", str(DATA_DIR / "video_cache")).strip()
+VIDEO_CACHE_TTL_HOURS = _env_int("VIDEO_CACHE_TTL_HOURS", 1)
+VIDEO_CACHE_CLEANUP_INTERVAL_SECONDS = _env_int("VIDEO_CACHE_CLEANUP_INTERVAL_SECONDS", 600)
 VIDEO_UPLOAD_MAX_MB = _env_int("VIDEO_UPLOAD_MAX_MB", 49)
 TELETHON_UPLOAD_MAX_MB = _env_int("TELETHON_UPLOAD_MAX_MB", VIDEO_SEND_MAX_MB)
 TELETHON_PARALLEL_UPLOAD = _env_bool("TELETHON_PARALLEL_UPLOAD", True)
 TELETHON_PARALLEL_UPLOAD_THRESHOLD_MB = _env_int("TELETHON_PARALLEL_UPLOAD_THRESHOLD_MB", 20)
-TELETHON_PARALLEL_UPLOAD_WORKERS = _env_int("TELETHON_PARALLEL_UPLOAD_WORKERS", 8)
-TELETHON_SESSION_NAME = os.getenv("TELETHON_SESSION_NAME", str(DATA_DIR / "pobreflix_uploader_bot")).strip()
+TELETHON_PARALLEL_UPLOAD_WORKERS = (
+    _env_int("TELETHON_PARALLEL_UPLOAD_WORKERS", 0)
+    or _env_int("USERBOT_UPLOAD_WORKERS", 0)
+    or 8
+)
+TELETHON_SESSION_NAME = (
+    os.getenv("TELETHON_SESSION_NAME", "").strip()
+    or os.getenv("USERBOT_SESSION_NAME", "").strip()
+    or str(DATA_DIR / "pobreflix_uploader_bot")
+)
 VIDEO_DOWNLOAD_PROTECT_CONTENT = _env_bool("VIDEO_DOWNLOAD_PROTECT_CONTENT", True)
 VIDEO_SEND_TIMEOUT = _env_int("VIDEO_SEND_TIMEOUT", 3600)
 VIDEO_TMP_DIR = Path(os.getenv("VIDEO_TMP_DIR", str(DATA_DIR / "video_tmp")).strip())
 VIDEO_TMP_DIR.mkdir(parents=True, exist_ok=True)
 EPISODE_CACHE_CHAT_ID = os.getenv("EPISODE_CACHE_CHAT_ID", "").strip()
-VIDEO_DOWNLOAD_QUEUE_LIMIT = _env_int("VIDEO_DOWNLOAD_QUEUE_LIMIT", 20)
-VIDEO_DOWNLOAD_WORKERS = _env_int("VIDEO_DOWNLOAD_WORKERS", 2)
+
+WATCH_BLOCK_BRAND = os.getenv("WATCH_BLOCK_BRAND", "BaltigoFlix").strip() or "BaltigoFlix"
+WATCH_BLOCK_URL = (
+    os.getenv("WATCH_BLOCK_URL", "http://baltigoflix.com.br/").strip()
+    or "http://baltigoflix.com.br/"
+)
+WATCH_BLOCK_PROMO_COOLDOWN = _env_int("WATCH_BLOCK_PROMO_COOLDOWN", 45)
+
 VIDEO_DOWNLOAD_CACHE_DIR = os.getenv("VIDEO_DOWNLOAD_CACHE_DIR", str(DATA_DIR / "video_cache")).strip()
 VIDEO_CACHE_TTL_HOURS = _env_int("VIDEO_CACHE_TTL_HOURS", 1)
 VIDEO_CACHE_CLEANUP_INTERVAL_SECONDS = _env_int("VIDEO_CACHE_CLEANUP_INTERVAL_SECONDS", 600)
