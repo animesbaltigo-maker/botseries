@@ -20,6 +20,7 @@ from config import (
 
 _client = None
 _enabled = False
+_last_error = ""
 
 ProgressCallback = Callable[[int, int], Awaitable[None] | None]
 PARALLEL_THRESHOLD_BYTES = max(1, TELETHON_PARALLEL_UPLOAD_THRESHOLD_MB) * 1024 * 1024
@@ -27,6 +28,20 @@ PARALLEL_THRESHOLD_BYTES = max(1, TELETHON_PARALLEL_UPLOAD_THRESHOLD_MB) * 1024 
 
 def telethon_configured() -> bool:
     return bool(API_ID and API_HASH and BOT_TOKEN)
+
+
+def last_telethon_error() -> str:
+    if _last_error:
+        return _last_error
+    if not API_ID:
+        return "API_ID nao configurado."
+    if not API_HASH:
+        return "API_HASH nao configurado."
+    if not BOT_TOKEN:
+        return "BOT_TOKEN nao configurado."
+    if not _enabled or not _client:
+        return "Uploader Telethon ainda nao esta conectado."
+    return ""
 
 
 def _as_message_list(result) -> list:
@@ -51,7 +66,7 @@ async def _delete_messages_best_effort(chat_id: int, messages: list) -> None:
 async def _assert_protected(chat_id: int, result) -> None:
     messages = _as_message_list(result)
     if not messages:
-        raise RuntimeError("Nao consegui confirmar se o video foi enviado protegido.")
+        raise RuntimeError("Nao consegui confirmar se o episodio foi enviado protegido.")
 
     unprotected = [
         message
@@ -69,11 +84,13 @@ async def _assert_protected(chat_id: int, result) -> None:
 
 
 async def start_telethon_uploader() -> bool:
-    global _client, _enabled
+    global _client, _enabled, _last_error
     if _enabled and _client:
+        _last_error = ""
         return True
 
     if not telethon_configured():
+        _last_error = last_telethon_error()
         return False
 
     try:
@@ -85,16 +102,18 @@ async def start_telethon_uploader() -> bool:
         _client = TelegramClient(str(session_path), API_ID, API_HASH)
         await _client.start(bot_token=BOT_TOKEN)
         _enabled = True
+        _last_error = ""
         return True
     except Exception as error:
-        print(f"[TELETHON_UPLOAD] disabled: {error!r}")
+        _last_error = repr(error)
+        print(f"[TELETHON_UPLOAD] disabled: {_last_error}")
         _client = None
         _enabled = False
         return False
 
 
 async def stop_telethon_uploader() -> None:
-    global _client, _enabled
+    global _client, _enabled, _last_error
     if _client:
         try:
             await _client.disconnect()
@@ -102,6 +121,7 @@ async def stop_telethon_uploader() -> None:
             pass
     _client = None
     _enabled = False
+    _last_error = ""
 
 
 async def _probe_video(path: Path) -> dict:
@@ -248,9 +268,14 @@ async def _send_media_request(
     from telethon import functions, types
 
     file_size = path.stat().st_size
+    file_arg = None
     callback = progress_callback
 
-    if TELETHON_PARALLEL_UPLOAD and as_video and file_size >= PARALLEL_THRESHOLD_BYTES:
+    if (
+        TELETHON_PARALLEL_UPLOAD
+        and as_video
+        and file_size >= PARALLEL_THRESHOLD_BYTES
+    ):
         file_arg = await _upload_big_file_parallel(path, progress_callback)
         callback = None
     else:
