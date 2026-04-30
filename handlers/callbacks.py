@@ -11,6 +11,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
 from config import (
+    ADMIN_IDS,
     EPISODES_PER_PAGE,
     SEARCH_SESSION_TTL_SECONDS,
     WATCH_BLOCK_BRAND,
@@ -18,10 +19,12 @@ from config import (
     WATCH_BLOCK_URL,
 )
 from core.video_download_queue import VideoDownloadJob, enqueue_video_download
+from handlers.offline_paywall import answer_subscription_check, send_offline_paywall
 from handlers.discover import callback_launches, callback_random
 from handlers.search import _build_results_keyboard, _build_search_text, get_search_session
 from services.metrics import log_event, mark_user_seen
 from services.watch_guard import is_watch_block_active_for_user
+from services.subscriptions import is_active_subscriber
 from services.catalog_client import (
     get_content_details,
     get_episodes,
@@ -115,7 +118,16 @@ def _owner_request_key(user, session_token: str) -> str:
 
 def _is_watch_locked_for_user(user) -> bool:
     user_id = getattr(user, "id", 0) or 0
+    if _has_subscription_access(user):
+        return False
     return is_watch_block_active_for_user(user_id)
+
+
+def _has_subscription_access(user) -> bool:
+    user_id = getattr(user, "id", 0) or 0
+    if user_id in ADMIN_IDS:
+        return True
+    return bool(user_id and is_active_subscriber(user_id))
 
 
 def _is_temporary_player_url(url: str) -> bool:
@@ -1239,6 +1251,10 @@ async def _handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
     data = query.data
 
+    if data == "subcheck":
+        await answer_subscription_check(query, user.id if user else 0)
+        return
+
     if data.startswith("pb_page|"):
         original_markup = await _show_loading_state(query)
         parts = data.split("|")
@@ -1467,6 +1483,10 @@ async def _handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         if _is_watch_locked_for_user(user):
             await _show_watch_blocked(query, original_markup)
             return
+        if not _has_subscription_access(user):
+            await _restore_reply_markup(getattr(query, "message", None), original_markup)
+            await send_offline_paywall(query, user, str(session.get("title") or ""))
+            return
 
         try:
             player_links = await asyncio.wait_for(_load_movie_player(context, session_token), timeout=18)
@@ -1539,6 +1559,10 @@ async def _handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
         if _is_watch_locked_for_user(user):
             await _show_watch_blocked(query, original_markup)
+            return
+        if not _has_subscription_access(user):
+            await _restore_reply_markup(getattr(query, "message", None), original_markup)
+            await send_offline_paywall(query, user, str(session.get("title") or ""))
             return
 
         try:
