@@ -769,13 +769,18 @@ def _is_direct_stream_url(url: str) -> bool:
     value = (url or "").lower()
     return any(
         token in value
-        for token in (".mp4", "googlevideo.com/videoplayback", "/videoplayback?", "/get_video?")
+        for token in (".mp4", ".m3u8", "googlevideo.com/videoplayback", "/videoplayback?", "/get_video?")
     )
 
 
 def _best_download_url(player_links: dict | None) -> str:
+    candidates = _download_candidates(player_links)
+    return candidates[0]["url"] if candidates else ""
+
+
+def _download_candidates(player_links: dict | None) -> list[dict]:
     if not isinstance(player_links, dict):
-        return ""
+        return []
 
     candidates: list[tuple[str, str]] = []
     downloads = player_links.get("downloads") or {}
@@ -792,10 +797,15 @@ def _best_download_url(player_links: dict | None) -> str:
 
     candidates.append(("player", str(player_links.get("player_url") or "").strip()))
 
-    for _, candidate in candidates:
+    result = []
+    seen = set()
+    for server, candidate in candidates:
         if candidate and _is_direct_stream_url(candidate):
-            return candidate
-    return ""
+            if candidate in seen:
+                continue
+            seen.add(candidate)
+            result.append({"label": _best_download_server(player_links, candidate) if server != "player" else "Player", "url": candidate})
+    return result
 
 
 def _best_download_server(player_links: dict | None, selected_url: str) -> str:
@@ -1466,7 +1476,8 @@ async def _handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             await _safe_answer(query, "NÃ£o consegui preparar o filme agora.", show_alert=True)
             return
 
-        player_url = _best_download_url(player_links)
+        download_candidates = _download_candidates(player_links)
+        player_url = download_candidates[0]["url"] if download_candidates else ""
         if not player_url or not _is_direct_stream_url(player_url):
             await _restore_reply_markup(getattr(query, "message", None), original_markup)
             await _safe_answer(query, "Esse filme ainda nÃ£o pode ser enviado no Telegram.", show_alert=True)
@@ -1498,6 +1509,7 @@ async def _handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                     title=title,
                     video_url=player_url,
                     caption=caption,
+                    video_urls=download_candidates,
                 ),
             )
         except RuntimeError as error:
@@ -1555,7 +1567,8 @@ async def _handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                 print("ERRO DOWNLOAD PLAYER LINKS:", repr(exc))
                 player_links = {}
 
-        player_url = _best_download_url(player_links)
+        download_candidates = _download_candidates(player_links)
+        player_url = download_candidates[0]["url"] if download_candidates else ""
         if not player_url or not _is_direct_stream_url(player_url):
             await _restore_reply_markup(getattr(query, "message", None), original_markup)
             await _safe_answer(query, "Esse episÃ³dio ainda nÃ£o pode ser enviado no Telegram.", show_alert=True)
@@ -1593,6 +1606,7 @@ async def _handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                     title=title,
                     video_url=player_url,
                     caption=caption,
+                    video_urls=download_candidates,
                 ),
             )
         except RuntimeError as error:
