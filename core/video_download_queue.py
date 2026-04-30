@@ -17,9 +17,11 @@ from config import (
     TELETHON_UPLOAD_MAX_MB,
     VIDEO_CACHE_CLEANUP_INTERVAL_SECONDS,
     VIDEO_CACHE_TTL_HOURS,
+    VIDEO_DOWNLOAD_CHUNK_MB,
     VIDEO_DOWNLOAD_CACHE_DIR,
     VIDEO_DOWNLOAD_MAX_MB,
     VIDEO_DOWNLOAD_PROTECT_CONTENT,
+    VIDEO_DOWNLOAD_TRUST_ENV,
     VIDEO_DOWNLOAD_QUEUE_LIMIT,
     VIDEO_DOWNLOAD_WORKERS,
     VIDEO_UPLOAD_MAX_MB,
@@ -37,7 +39,7 @@ HEADERS = {
     "Origin": SOURCE_SITE_BASE,
 }
 
-CHUNK_SIZE = 4 * 1024 * 1024
+CHUNK_SIZE = max(1, VIDEO_DOWNLOAD_CHUNK_MB) * 1024 * 1024
 PROGRESS_INTERVAL = 3.0
 MAX_BYTES = max(1, VIDEO_DOWNLOAD_MAX_MB) * 1024 * 1024
 UPLOAD_MAX_BYTES = max(1, VIDEO_UPLOAD_MAX_MB) * 1024 * 1024
@@ -215,7 +217,12 @@ async def _download_file(job: VideoDownloadJob, entry: dict) -> Path:
         return await _download_hls(job, entry, target, temp)
 
     timeout = httpx.Timeout(connect=10.0, read=60.0, write=60.0, pool=10.0)
-    async with httpx.AsyncClient(timeout=timeout, follow_redirects=True, headers=HEADERS) as client:
+    async with httpx.AsyncClient(
+        timeout=timeout,
+        follow_redirects=True,
+        headers=HEADERS,
+        trust_env=VIDEO_DOWNLOAD_TRUST_ENV,
+    ) as client:
         async with client.stream("GET", job.video_url) as response:
             response.raise_for_status()
             content_type = str(response.headers.get("content-type") or "").lower()
