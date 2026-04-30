@@ -389,7 +389,7 @@ async def _upload_video(
             if not telethon_configured():
                 raise RuntimeError(
                     "Arquivo grande demais para o Bot API oficial. "
-                    "Preencha API_ID e API_HASH no .env para ativar o uploader Telethon."
+                    "Preencha API_ID e API_HASH no .env para ativar o uploader Telethon igual ao bot de animes."
                 )
             if upload_total > TELETHON_MAX_BYTES:
                 raise RuntimeError(
@@ -397,7 +397,7 @@ async def _upload_video(
                 )
 
             await bot.send_chat_action(chat_id=chat_id, action="upload_video")
-            ok = await send_file_with_telethon(
+            sent = await send_file_with_telethon(
                 int(chat_id),
                 tmp_path,
                 _safe_caption(request.caption),
@@ -405,8 +405,8 @@ async def _upload_video(
                 progress_callback=lambda current, total: _mark_upload(current),
                 protect_content=VIDEO_DOWNLOAD_PROTECT_CONTENT,
             )
-            if not ok:
-                raise RuntimeError("O uploader Telethon nao conseguiu iniciar. Confira API_ID e API_HASH.")
+            if not sent:
+                raise RuntimeError("O uploader Telethon nao conseguiu iniciar. Confira API_ID, API_HASH e telethon.")
             return None, download_meta
 
         await bot.send_chat_action(chat_id=chat_id, action="upload_video")
