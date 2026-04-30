@@ -22,6 +22,7 @@ from core.video_download_queue import VideoDownloadJob, enqueue_video_download
 from handlers.offline_paywall import answer_subscription_check, send_offline_paywall
 from handlers.discover import callback_launches, callback_random
 from handlers.search import _build_results_keyboard, _build_search_text, get_search_session
+from services.cakto_gateway import get_checkout_options
 from services.metrics import log_event, mark_user_seen
 from services.watch_guard import is_watch_block_active_for_user
 from services.subscriptions import is_active_subscriber
@@ -364,10 +365,15 @@ def _watch_block_message_text() -> str:
     )
 
 
-def _watch_block_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        [[InlineKeyboardButton(f"✨ Assinar {WATCH_BLOCK_BRAND}", url=WATCH_BLOCK_URL)]]
-    )
+def _watch_block_keyboard(user_id: int = 0) -> InlineKeyboardMarkup:
+    rows = [
+        [InlineKeyboardButton(option["label"], url=option["url"])]
+        for option in get_checkout_options(user_id)
+    ]
+    rows.append([InlineKeyboardButton("Ja paguei / verificar", callback_data="subcheck")])
+    if not rows or (len(rows) == 1 and WATCH_BLOCK_URL):
+        rows.insert(0, [InlineKeyboardButton(f"Assinar {WATCH_BLOCK_BRAND}", url=WATCH_BLOCK_URL)])
+    return InlineKeyboardMarkup(rows)
 
 
 async def _send_watch_block_message(query) -> None:
@@ -377,6 +383,7 @@ async def _send_watch_block_message(query) -> None:
 
     cooldown = max(int(WATCH_BLOCK_PROMO_COOLDOWN or 0), 0)
     promo_key = _watch_block_promo_key(query)
+    user_id = getattr(getattr(query, "from_user", None), "id", 0) or 0
     now = _now()
     if cooldown > 0:
         last_sent = float(_WATCH_BLOCK_PROMOS.get(promo_key) or 0.0)
@@ -387,7 +394,7 @@ async def _send_watch_block_message(query) -> None:
         await message.reply_text(
             _watch_block_message_text(),
             parse_mode="HTML",
-            reply_markup=_watch_block_keyboard(),
+            reply_markup=_watch_block_keyboard(user_id),
             disable_web_page_preview=True,
         )
         _WATCH_BLOCK_PROMOS[promo_key] = now
