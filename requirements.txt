@@ -12,3 +12,4 @@ lxml>=5.0
 # Outras dependências úteis
 python-dotenv>=1.0
 pycryptodomex>=3.20
+telethon>=1.34
