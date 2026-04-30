@@ -17,10 +17,10 @@ from config import (
     WATCH_BLOCK_PROMO_COOLDOWN,
     WATCH_BLOCK_URL,
 )
+from core.video_download_queue import VideoDownloadJob, enqueue_video_download
 from handlers.discover import callback_launches, callback_random
 from handlers.search import _build_results_keyboard, _build_search_text, get_search_session
 from services.metrics import log_event, mark_user_seen
-from services.episode_delivery import VideoDeliveryRequest, deliver_video_request
 from services.watch_guard import is_watch_block_active_for_user
 from services.catalog_client import (
     get_content_details,
@@ -777,19 +777,34 @@ def _best_download_url(player_links: dict | None) -> str:
     if not isinstance(player_links, dict):
         return ""
 
-    candidates: list[str] = []
+    candidates: list[tuple[str, str]] = []
     downloads = player_links.get("downloads") or {}
     if isinstance(downloads, dict):
-        for item in downloads.values():
+        for server in ("byse", "mixdrop", "doodstream", "streamtape"):
+            item = downloads.get(server)
             if isinstance(item, dict):
-                candidates.append(str(item.get("url") or "").strip())
+                candidates.append((server, str(item.get("url") or "").strip()))
+        for server, item in downloads.items():
+            if server in {"byse", "mixdrop", "doodstream", "streamtape"}:
+                continue
+            if isinstance(item, dict):
+                candidates.append((server, str(item.get("url") or "").strip()))
 
-    candidates.append(str(player_links.get("player_url") or "").strip())
+    candidates.append(("player", str(player_links.get("player_url") or "").strip()))
 
-    for candidate in candidates:
+    for _, candidate in candidates:
         if candidate and _is_direct_stream_url(candidate):
             return candidate
     return ""
+
+
+def _best_download_server(player_links: dict | None, selected_url: str) -> str:
+    downloads = (player_links or {}).get("downloads") or {}
+    if isinstance(downloads, dict):
+        for server, item in downloads.items():
+            if isinstance(item, dict) and str(item.get("url") or "").strip() == selected_url:
+                return str(item.get("label") or server).strip() or server
+    return "Player"
 
 
 def _player_keyboard(
@@ -1459,19 +1474,37 @@ async def _handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
         selected_audio = str(session.get("selected_audio") or session.get("default_audio") or "").strip().lower()
         title = str(session.get("title") or "Filme").strip() or "Filme"
-        request = VideoDeliveryRequest(
-            cache_key=_movie_delivery_cache_key(session),
-            source_url=player_url,
-            display_name=f"{title} - {_audio_text_label(selected_audio)}",
-            caption=_movie_player_text(title, selected_audio),
-        )
+        server_label = _best_download_server(player_links, player_url)
         log_event(
             event_type="telegram_video_request",
             user_id=user.id if user else 0,
             username=((user.username or user.first_name or "") if user else ""),
             query_text=title,
         )
-        context.application.create_task(_finish_video_delivery(query.message, request, original_markup))
+        caption = (
+            f"<b>{html.escape(title)}</b>\n"
+            "<b>Tipo:</b> Filme\n"
+            f"<b>Idioma:</b> {html.escape(_audio_text_label(selected_audio))}"
+        )
+        try:
+            await enqueue_video_download(
+                context.application,
+                VideoDownloadJob(
+                    user_id=user.id if user else 0,
+                    chat_id=query.message.chat_id,
+                    content_id=_movie_delivery_cache_key(session),
+                    item_label=_audio_text_label(selected_audio),
+                    quality=server_label,
+                    title=title,
+                    video_url=player_url,
+                    caption=caption,
+                ),
+            )
+        except RuntimeError as error:
+            await _restore_reply_markup(getattr(query, "message", None), original_markup)
+            await _safe_answer(query, str(error), show_alert=True)
+            return
+        await _restore_reply_markup(getattr(query, "message", None), original_markup)
         await _safe_answer(query, "â³ Preparando o filme no Telegram...")
         return
 
@@ -1535,19 +1568,38 @@ async def _handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         title = str(session.get("title") or "SÃ©rie").strip() or "SÃ©rie"
         episode_number = _episode_number_value(episode, episode_idx)
         label = _episode_display_label(episode, episode_idx)
-        request = VideoDeliveryRequest(
-            cache_key=_episode_delivery_cache_key(session, season, episode, episode_idx),
-            source_url=player_url,
-            display_name=f"{title} - T{season:02d}E{episode_number:02d} - {_audio_text_label(selected_audio)}",
-            caption=_player_text(title, season, episode, episode_idx, len(episodes)),
-        )
+        server_label = _best_download_server(player_links, player_url)
         log_event(
             event_type="telegram_video_request",
             user_id=user.id if user else 0,
             username=((user.username or user.first_name or "") if user else ""),
             query_text=f"{title} - {label}",
         )
-        context.application.create_task(_finish_video_delivery(query.message, request, original_markup))
+        caption = (
+            f"<b>{html.escape(title)}</b>\n"
+            f"<b>Episodio:</b> {html.escape(label)}\n"
+            f"<b>Temporada:</b> {season}\n"
+            f"<b>Idioma:</b> {html.escape(_audio_text_label(selected_audio))}"
+        )
+        try:
+            await enqueue_video_download(
+                context.application,
+                VideoDownloadJob(
+                    user_id=user.id if user else 0,
+                    chat_id=query.message.chat_id,
+                    content_id=_episode_delivery_cache_key(session, season, episode, episode_idx),
+                    item_label=f"T{season:02d}E{episode_number:02d}",
+                    quality=server_label,
+                    title=title,
+                    video_url=player_url,
+                    caption=caption,
+                ),
+            )
+        except RuntimeError as error:
+            await _restore_reply_markup(getattr(query, "message", None), original_markup)
+            await _safe_answer(query, str(error), show_alert=True)
+            return
+        await _restore_reply_markup(getattr(query, "message", None), original_markup)
         await _safe_answer(query, "â³ Preparando o episÃ³dio no Telegram...")
         return
 
