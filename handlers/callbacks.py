@@ -20,6 +20,7 @@ from config import (
 from handlers.discover import callback_launches, callback_random
 from handlers.search import _build_results_keyboard, _build_search_text, get_search_session
 from services.metrics import log_event, mark_user_seen
+from services.episode_delivery import VideoDeliveryRequest, deliver_video_request
 from services.watch_guard import is_watch_block_active_for_user
 from services.catalog_client import (
     get_content_details,
@@ -86,6 +87,21 @@ def _seasons_cache_key(token: str, audio: str = "") -> str:
 def _movie_cache_key(token: str, audio: str = "") -> str:
     audio_key = (audio or "default").strip().lower()
     return f"pb_movie_cache:{token}:{audio_key}"
+
+
+def _movie_delivery_cache_key(session: dict) -> str:
+    title = _normalize_media_title(str(session.get("title") or "filme"))
+    audio = str(session.get("selected_audio") or session.get("default_audio") or "default").strip().lower()
+    url = str(session.get("url") or "").strip()
+    return f"pb_movie_delivery:{title}:{audio}:{url}"
+
+
+def _episode_delivery_cache_key(session: dict, season: int, episode: dict, episode_idx: int) -> str:
+    title = _normalize_media_title(str(session.get("title") or "serie"))
+    audio = str(session.get("selected_audio") or session.get("default_audio") or "default").strip().lower()
+    number = _episode_number_value(episode, episode_idx)
+    url = str((episode or {}).get("url") or (episode or {}).get("resolver_url") or "").strip()
+    return f"pb_episode_delivery:{title}:{audio}:s{season}:e{number}:{url}"
 
 
 def _player_request_key(content_url: str, audio_key: str = "") -> str:
@@ -677,6 +693,25 @@ def _is_direct_stream_url(url: str) -> bool:
     )
 
 
+def _best_download_url(player_links: dict | None) -> str:
+    if not isinstance(player_links, dict):
+        return ""
+
+    candidates: list[str] = []
+    downloads = player_links.get("downloads") or {}
+    if isinstance(downloads, dict):
+        for item in downloads.values():
+            if isinstance(item, dict):
+                candidates.append(str(item.get("url") or "").strip())
+
+    candidates.append(str(player_links.get("player_url") or "").strip())
+
+    for candidate in candidates:
+        if candidate and _is_direct_stream_url(candidate):
+            return candidate
+    return ""
+
+
 def _player_keyboard(
     session_token: str,
     session: dict,
@@ -691,6 +726,11 @@ def _player_keyboard(
 ) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
     rows.append([InlineKeyboardButton(watch_label, url=player_url)])
+
+    if episode_idx is not None:
+        rows.append([InlineKeyboardButton("📥 Baixar no Telegram", callback_data=f"pb_dl_ep|{session_token}|{season}|{episode_idx}")])
+    else:
+        rows.append([InlineKeyboardButton("📥 Baixar no Telegram", callback_data=f"pb_dl_movie|{session_token}")])
 
     if episode_idx is not None and total_episodes > 0:
         nav: list[InlineKeyboardButton] = []
@@ -1305,7 +1345,7 @@ async def _handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         await _show_movie_player_panel(query, context, parts[1], user, restore_markup=original_markup)
         return
 
-    if False and data.startswith("pb_dl_movie|"):
+    if data.startswith("pb_dl_movie|"):
         original_markup = await _show_loading_state(query)
         parts = data.split("|")
         if len(parts) < 2:
@@ -1332,7 +1372,7 @@ async def _handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             await _safe_answer(query, "NÃ£o consegui preparar o filme agora.", show_alert=True)
             return
 
-        player_url = str(player_links.get("player_url") or "").strip()
+        player_url = _best_download_url(player_links)
         if not player_url or not _is_direct_stream_url(player_url):
             await _restore_reply_markup(getattr(query, "message", None), original_markup)
             await _safe_answer(query, "Esse filme ainda nÃ£o pode ser enviado no Telegram.", show_alert=True)
@@ -1356,7 +1396,7 @@ async def _handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         await _safe_answer(query, "â³ Preparando o filme no Telegram...")
         return
 
-    if False and data.startswith("pb_dl_ep|"):
+    if data.startswith("pb_dl_ep|"):
         original_markup = await _show_loading_state(query)
         parts = data.split("|")
         if len(parts) < 4:
@@ -1403,7 +1443,7 @@ async def _handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                 print("ERRO DOWNLOAD PLAYER LINKS:", repr(exc))
                 player_links = {}
 
-        player_url = str(player_links.get("player_url") or "").strip()
+        player_url = _best_download_url(player_links)
         if not player_url or not _is_direct_stream_url(player_url):
             await _restore_reply_markup(getattr(query, "message", None), original_markup)
             await _safe_answer(query, "Esse episÃ³dio ainda nÃ£o pode ser enviado no Telegram.", show_alert=True)
