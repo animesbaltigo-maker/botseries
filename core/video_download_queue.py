@@ -5,7 +5,7 @@ import html
 import re
 import shutil
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -64,6 +64,7 @@ class VideoDownloadJob:
     title: str
     video_url: str
     caption: str
+    video_urls: list[dict] = field(default_factory=list)
 
 
 _workers: list[asyncio.Task] = []
@@ -204,7 +205,63 @@ async def _upload_progress(entry: dict, job: VideoDownloadJob, current: int, tot
         await _safe_edit(message, text)
 
 
+def _job_video_candidates(job: VideoDownloadJob) -> list[dict]:
+    candidates = [{"url": job.video_url, "label": job.quality}]
+    for item in job.video_urls or []:
+        if not isinstance(item, dict):
+            continue
+        candidates.append({
+            "url": str(item.get("url") or "").strip(),
+            "label": str(item.get("label") or job.quality).strip() or job.quality,
+        })
+
+    unique = []
+    seen = set()
+    for item in candidates:
+        url = str(item.get("url") or "").strip()
+        if not url or url in seen:
+            continue
+        seen.add(url)
+        unique.append({"url": url, "label": str(item.get("label") or job.quality).strip() or job.quality})
+    return unique
+
+
+def _should_try_next_download_error(error: Exception) -> bool:
+    text = str(error or "").lower()
+    return any(
+        token in text
+        for token in (
+            "player ainda nao fornece",
+            "link de video nao pode",
+            "response",
+            "status code",
+            "403",
+            "404",
+            "410",
+            "429",
+            "html",
+        )
+    )
+
+
 async def _download_file(job: VideoDownloadJob, entry: dict) -> Path:
+    last_error: Exception | None = None
+    for candidate in _job_video_candidates(job):
+        attempt = replace(job, video_url=candidate["url"], quality=candidate["label"])
+        try:
+            return await _download_single_file(attempt, entry)
+        except Exception as error:
+            last_error = error
+            if not _should_try_next_download_error(error):
+                raise
+            print(f"[VIDEO_DOWNLOAD] player_failed label={candidate['label']!r} error={error!r}")
+
+    if last_error:
+        raise last_error
+    raise RuntimeError("Nenhum player forneceu um arquivo de video direto.")
+
+
+async def _download_single_file(job: VideoDownloadJob, entry: dict) -> Path:
     if not (job.video_url or "").lower().startswith("http"):
         raise RuntimeError("Esse link de video nao pode ser baixado direto.")
 
