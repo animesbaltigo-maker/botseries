@@ -290,9 +290,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
             first_name = html.escape(user.first_name or "cinefilo")
             text = (
-                f"👋 <b>Olá, {first_name}!</b>\n\n"
-                f"Bem-vindo ao <b>{html.escape(BOT_BRAND)}</b>, seu bot de <b>filmes e séries</b> no Telegram.\n\n"
-                "Aqui você encontra conteúdos para explorar e assistir com mais praticidade, direto pelo bot.\n\n"
+                f"🍿 <b>Bem-vindo ao {html.escape(BOT_BRAND)}, {first_name}!</b>\n\n"
+                "Filmes e séries para encontrar, explorar e assistir com praticidade no Telegram.\n\n"
+                "<blockquote>• 🔎 Busque títulos pelo nome\n"
+                "• 🍿 Veja lançamentos\n"
+                "• ▶️ Abra o conteúdo em poucos toques</blockquote>\n\n"
                 "<i>Escolha uma opção abaixo para começar.</i>"
             )
 
