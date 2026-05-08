@@ -1,8 +1,9 @@
 import asyncio
 import html
+import os
 import time
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, WebAppInfo
 from telegram.ext import ContextTypes
 
 from config import BOT_BRAND
@@ -29,6 +30,11 @@ from utils.gatekeeper import ensure_channel_membership
 
 START_COOLDOWN = 1.0
 START_DEEP_LINK_TTL = 8.0
+BANNER_URL = "https://photo.chelpbot.me/AgACAgEAAxkBa-u4XWn-Y7X_fc6oA5DyoV_r5I-Ndl1kAALdC2sb2U34R8E6ElaxXE1YAQADAgADeQADOwQ/photo.jpg"
+BALTIGO_UNIVERSE_WEBAPP_URL = os.getenv(
+    "BALTIGO_UNIVERSE_WEBAPP_URL",
+    "https://rough-double-remarkable-north.trycloudflare.com/miniapp/bots/index.html",
+).strip()
 
 _START_USER_LOCKS: dict[int, asyncio.Lock] = {}
 _START_INFLIGHT: dict[str, float] = {}
@@ -84,6 +90,7 @@ def _start_keyboard() -> InlineKeyboardMarkup:
     rows = [
         [InlineKeyboardButton("🍿 Lançamentos", callback_data="pb_launches")],
         [InlineKeyboardButton("🎲 Aleatório", callback_data="pb_random")],
+        [InlineKeyboardButton("⚔️ Universo Baltigo", web_app=WebAppInfo(url=BALTIGO_UNIVERSE_WEBAPP_URL))],
     ]
     return InlineKeyboardMarkup(rows)
 
@@ -298,12 +305,20 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 "<i>Escolha uma opção abaixo para começar.</i>"
             )
 
-            await message.reply_text(
-                text,
-                parse_mode="HTML",
-                reply_markup=_start_keyboard(),
-                disable_web_page_preview=True,
-            )
+            try:
+                await message.reply_photo(
+                    photo=BANNER_URL,
+                    caption=text,
+                    parse_mode="HTML",
+                    reply_markup=_start_keyboard(),
+                )
+            except Exception:
+                await message.reply_text(
+                    text,
+                    parse_mode="HTML",
+                    reply_markup=_start_keyboard(),
+                    disable_web_page_preview=True,
+                )
         finally:
             if payload:
                 _clear_inflight(user.id, payload)
