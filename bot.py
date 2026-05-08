@@ -34,6 +34,8 @@ from handlers.broadcast import (
     broadcast_message_router,
     broadcast_public_callbacks,
 )
+from handlers.control_block import control_block_callback_guard, control_block_message_guard
+from services.control_agent import start_control_agent, stop_control_agent
 from handlers.callbacks import callbacks
 from handlers.discover import aleatorio, lancamentos
 from handlers.group_ai import esquecer_handler, group_ai_handler
@@ -78,6 +80,7 @@ def _configure_logging() -> None:
 
 
 async def post_shutdown(app: Application) -> None:
+    await stop_control_agent(app)
     await stop_video_download_workers(app)
     await stop_telethon_uploader()
     await close_catalog_client()
@@ -85,6 +88,7 @@ async def post_shutdown(app: Application) -> None:
 
 
 async def post_init(app: Application) -> None:
+    await start_control_agent(app)
     await start_telethon_uploader()
     await start_video_download_workers(app)
 
@@ -138,6 +142,9 @@ def main() -> None:
         .post_shutdown(post_shutdown)
         .build()
     )
+
+    app.add_handler(CallbackQueryHandler(control_block_callback_guard, pattern=r".*"), group=-100)
+    app.add_handler(MessageHandler(filters.ALL, control_block_message_guard), group=-100)
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("buscar", buscar))
