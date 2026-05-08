@@ -28,7 +28,12 @@ from core.telethon_uploader import start_telethon_uploader, stop_telethon_upload
 from core.video_download_queue import start_video_download_workers, stop_video_download_workers
 from handlers.bingo import bingo
 from handlers.bingo_admin import resetbingo, sortear, startbingo, startbingo_auto
-from handlers.broadcast import broadcast_callbacks, broadcast_command, broadcast_message_router
+from handlers.broadcast import (
+    broadcast_callbacks,
+    broadcast_command,
+    broadcast_message_router,
+    broadcast_public_callbacks,
+)
 from handlers.callbacks import callbacks
 from handlers.discover import aleatorio, lancamentos
 from handlers.group_ai import esquecer_handler, group_ai_handler
@@ -166,6 +171,7 @@ def main() -> None:
     app.add_handler(InlineQueryHandler(inline_query))
 
     app.add_handler(CallbackQueryHandler(broadcast_callbacks, pattern=r"^bc\|"))
+    app.add_handler(CallbackQueryHandler(broadcast_public_callbacks, pattern=r"^bc_public\|"))
     app.add_handler(CallbackQueryHandler(referral_button, pattern=r"^noop_indicar$"))
     app.add_handler(CallbackQueryHandler(callbacks, pattern=r"^(pb_|subcheck$|noop$)"))
 
