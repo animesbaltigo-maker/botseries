@@ -4,6 +4,7 @@ import asyncio
 import base64
 import io
 import os
+import sqlite3
 import time
 from typing import Any
 
@@ -14,6 +15,7 @@ from telegram.error import BadRequest, Forbidden, RetryAfter, TimedOut, NetworkE
 
 from config import ADMIN_IDS
 from services.control_blocklist import block_user, get_blocked_users, is_blocked
+from services.subscriptions import DB_PATH as SUBSCRIPTIONS_DB_PATH, init_subscriptions_db, normalize_plan, plan_label
 from services.user_registry import get_all_users, get_total_users, remove_user
 
 CONTROL_SECRET = os.getenv("CONTROL_SECRET", "")
@@ -26,6 +28,43 @@ CONTROL_BOT_NAME = os.getenv("CONTROL_BOT_NAME", "SeriesBrazilBot").strip() or C
 _RUNNER: web.AppRunner | None = None
 _SITE: web.TCPSite | None = None
 _STATE: dict[str, Any] = {"broadcast_running": False, "started_at": int(time.time())}
+
+
+def _premium_metrics() -> dict[str, Any]:
+    try:
+        init_subscriptions_db()
+        now = int(time.time())
+        with sqlite3.connect(SUBSCRIPTIONS_DB_PATH) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                """
+                SELECT plan_code, plan_name,
+                       COUNT(*) AS total,
+                       SUM(CASE WHEN status = 'active' AND expires_at > ? THEN 1 ELSE 0 END) AS active
+                FROM user_subscriptions
+                GROUP BY plan_code, plan_name
+                ORDER BY active DESC, total DESC, plan_name
+                """,
+                (now,),
+            ).fetchall()
+        plans: list[dict[str, Any]] = []
+        active_total = 0
+        total_records = 0
+        for row in rows:
+            code = normalize_plan(row["plan_code"]) or str(row["plan_code"] or "").strip() or "plano"
+            active = int(row["active"] or 0)
+            total = int(row["total"] or 0)
+            active_total += active
+            total_records += total
+            plans.append({
+                "code": code,
+                "name": plan_label(code) or str(row["plan_name"] or code),
+                "active": active,
+                "total": total,
+            })
+        return {"available": True, "active_total": active_total, "total_records": total_records, "plans": plans}
+    except Exception as exc:
+        return {"available": False, "error": str(exc)}
 
 
 def _authorized(request: web.Request) -> bool:
@@ -170,6 +209,7 @@ async def _metrics(request: web.Request) -> web.Response:
         "users_inactive": 0,
         "users_banned": len(blocked),
         "admins": len(ADMIN_IDS),
+        "premium": _premium_metrics(),
         "broadcast_running": bool(_STATE.get("broadcast_running")),
         "last_broadcast": _STATE.get("last_broadcast") or {},
     })
