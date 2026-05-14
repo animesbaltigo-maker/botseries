@@ -17,6 +17,7 @@ from config import (
     DATA_DIR,
 )
 from services.catalog_client import get_content_details, get_recent_series
+from services.series_update_mockup import render_series_update_mockup
 from services.start_payloads import build_start_link, create_start_payload
 
 POSTED_JSON_PATH = Path(DATA_DIR) / "episodios_postados.json"
@@ -159,7 +160,7 @@ def _build_caption(item: dict, detail: dict | None = None) -> str:
     footer = html.escape(CANAL_ATUALIZACOES_TAG or "@AtualizacoesOn")
 
     return (
-        f"📺 <b>{title}</b>\n\n"
+        f"🎬 <b>{title}</b>\n\n"
         "<blockquote>"
         f"<b>Episódio:</b> {episode}\n"
         f"<b>Status:</b> {status}\n"
@@ -239,7 +240,7 @@ def _build_keyboard(
     deep_link = build_start_link(bot_username, token)
 
     return InlineKeyboardMarkup(
-        [[InlineKeyboardButton("▶️ Assistir no bot", url=deep_link)]]
+        [[InlineKeyboardButton("🎬 Ver série", url=deep_link)]]
     )
 
 
@@ -267,9 +268,10 @@ async def _post_item(context: ContextTypes.DEFAULT_TYPE, item: dict, destination
 
         if image:
             try:
+                photo = await render_series_update_mockup(image)
                 await context.bot.send_photo(
                     chat_id=destination,
-                    photo=image,
+                    photo=photo,
                     caption=caption,
                     parse_mode="HTML",
                     reply_markup=keyboard,
