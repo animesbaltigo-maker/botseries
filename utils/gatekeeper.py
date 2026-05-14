@@ -2,12 +2,13 @@
 
 import html
 import logging
+import re
 import time
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
-from config import REQUIRED_CHANNELS, REQUIRED_CHANNEL_URL
+from config import REQUIRED_CHANNELS
 
 LOGGER = logging.getLogger(__name__)
 
@@ -15,6 +16,13 @@ _MEMBERSHIP_CACHE: dict[int, tuple[bool, float]] = {}
 _MEMBER_TTL = 15
 _NON_MEMBER_TTL = 5
 _ALLOWED_MEMBER_STATUSES = {"member", "administrator", "creator"}
+
+_CHANNEL_LABELS = {
+    "@AtualizacoesOn": "📢 Atualizações",
+    "@Series_Brazil": "🎬 Séries Brazil",
+    "@TvGlobinhos": "📺 TV Globinhos",
+    "@QG_BALTIGO": "🏠 QG Baltigo",
+}
 
 
 def _cache_get(user_id: int) -> bool | None:
@@ -41,12 +49,30 @@ def _is_member_allowed(member) -> bool:
     return status == "restricted" and bool(getattr(member, "is_member", False))
 
 
-def _channel_keyboard() -> InlineKeyboardMarkup | None:
-    if not REQUIRED_CHANNEL_URL:
-        return None
-    return InlineKeyboardMarkup(
-        [[InlineKeyboardButton("📢 Entrar nos canais", url=REQUIRED_CHANNEL_URL)]]
-    )
+def _channel_url(channel: str) -> str:
+    channel = str(channel or "").strip()
+    if channel.startswith("@"):
+        return f"https://t.me/{channel[1:]}"
+    if channel.startswith("http://") or channel.startswith("https://"):
+        return channel
+    return f"https://t.me/{channel.lstrip('@')}"
+
+
+def _channel_label(channel: str) -> str:
+    channel = str(channel or "").strip()
+    if channel in _CHANNEL_LABELS:
+        return _CHANNEL_LABELS[channel]
+    clean = re.sub(r"[_-]+", " ", channel.lstrip("@")).strip().title()
+    return f"📢 {clean or 'Canal'}"
+
+
+def _channel_keyboard() -> InlineKeyboardMarkup:
+    buttons = [
+        InlineKeyboardButton(_channel_label(channel), url=_channel_url(channel))
+        for channel in REQUIRED_CHANNELS
+    ]
+    rows = [buttons[index : index + 2] for index in range(0, len(buttons), 2)]
+    return InlineKeyboardMarkup(rows)
 
 
 async def is_user_in_required_channel(bot, user_id: int) -> bool:
@@ -107,9 +133,9 @@ async def ensure_channel_membership(
     name = html.escape(user.first_name or "amigo")
     await message.reply_text(
         f"🛑 <b>Calma aí, {name}</b>\n\n"
-        "Para usar este comando, você precisa entrar nos meus canais primeiro.\n\n"
-        "Assim você fica por dentro das novidades, avisos e atualizações.\n\n"
-        "Clique abaixo, entre nos canais da pasta e volte para tentar novamente.",
+        "Para usar este comando, você precisa entrar nos canais oficiais primeiro.\n\n"
+        "É por lá que eu aviso novidades, lançamentos e atualizações importantes.\n\n"
+        "Entre nos canais abaixo e envie o comando novamente.",
         parse_mode="HTML",
         reply_markup=_channel_keyboard(),
     )

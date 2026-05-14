@@ -116,7 +116,7 @@ REQUIRED_CHANNELS = _env_str_list(
     "@AtualizacoesOn,@Series_Brazil,@TvGlobinhos,@QG_BALTIGO",
 )
 REQUIRED_CHANNEL_URL = _normalize_telegram_url(
-    os.getenv("REQUIRED_CHANNEL_FOLDER_URL", "https://t.me/addlist/UCI697lVhP9iOWUx").strip() or REQUIRED_CHANNEL
+    os.getenv("REQUIRED_CHANNEL_URL", "https://t.me/Series_Brazil").strip() or REQUIRED_CHANNEL
 )
 CANAL_POSTAGEM = os.getenv("CANAL_POSTAGEM", "").strip()
 
