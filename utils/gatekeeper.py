@@ -1,4 +1,4 @@
-"""Verifica se o usuario entrou no canal obrigatorio."""
+"""Verifica se o usuario entrou em todos os canais obrigatorios."""
 
 import html
 import logging
@@ -7,13 +7,12 @@ import time
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
-from config import REQUIRED_CHANNEL, REQUIRED_CHANNEL_URL
+from config import REQUIRED_CHANNELS, REQUIRED_CHANNEL_URL
 
 LOGGER = logging.getLogger(__name__)
 
 _MEMBERSHIP_CACHE: dict[int, tuple[bool, float]] = {}
 _MEMBER_TTL = 15
-# Revalida rápido para refletir entrada/saída do canal quase na hora.
 _NON_MEMBER_TTL = 5
 _ALLOWED_MEMBER_STATUSES = {"member", "administrator", "creator"}
 
@@ -39,62 +38,58 @@ def _is_member_allowed(member) -> bool:
     status = str(getattr(member, "status", "") or "").strip().lower()
     if status in _ALLOWED_MEMBER_STATUSES:
         return True
-    if status == "restricted" and bool(getattr(member, "is_member", False)):
-        return True
-    return False
+    return status == "restricted" and bool(getattr(member, "is_member", False))
 
 
 def _channel_keyboard() -> InlineKeyboardMarkup | None:
     if not REQUIRED_CHANNEL_URL:
         return None
     return InlineKeyboardMarkup(
-        [[InlineKeyboardButton("📢 Entrar no canal", url=REQUIRED_CHANNEL_URL)]]
+        [[InlineKeyboardButton("📢 Entrar nos canais", url=REQUIRED_CHANNEL_URL)]]
     )
 
 
-def _required_channel_label() -> str:
-    value = str(REQUIRED_CHANNEL or "").strip()
-    return html.escape(value or "canal obrigatório")
-
-
 async def is_user_in_required_channel(bot, user_id: int) -> bool:
-    if not REQUIRED_CHANNEL:
+    if not REQUIRED_CHANNELS:
         return True
 
     cached = _cache_get(user_id)
     if cached is not None:
         return cached
 
-    try:
-        member = await bot.get_chat_member(REQUIRED_CHANNEL, user_id)
-        allowed = _is_member_allowed(member)
-        if not allowed:
-            LOGGER.info(
-                "Canal obrigatório negado para user_id=%s em %s: status=%s is_member=%s",
+    for channel in REQUIRED_CHANNELS:
+        try:
+            member = await bot.get_chat_member(channel, user_id)
+        except Exception as exc:
+            LOGGER.warning(
+                "Falha ao validar canal obrigatorio para user_id=%s em %s.",
                 user_id,
-                REQUIRED_CHANNEL,
+                channel,
+                exc_info=exc,
+            )
+            _cache_set(user_id, False)
+            return False
+
+        if not _is_member_allowed(member):
+            LOGGER.info(
+                "Canal obrigatorio negado para user_id=%s em %s: status=%s is_member=%s",
+                user_id,
+                channel,
                 getattr(member, "status", None),
                 getattr(member, "is_member", None),
             )
-        _cache_set(user_id, allowed)
-        return allowed
-    except Exception as exc:
-        LOGGER.warning(
-            "Falha ao validar canal obrigatório para user_id=%s em %s. "
-            "Verifique se o bot está no canal e com permissão para consultar membros.",
-            user_id,
-            REQUIRED_CHANNEL,
-            exc_info=exc,
-        )
-        _cache_set(user_id, False)
-        return False
+            _cache_set(user_id, False)
+            return False
+
+    _cache_set(user_id, True)
+    return True
 
 
 async def ensure_channel_membership(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
 ) -> bool:
-    if not REQUIRED_CHANNEL:
+    if not REQUIRED_CHANNELS:
         return True
 
     user = update.effective_user
@@ -109,10 +104,12 @@ async def ensure_channel_membership(
     if not message:
         return False
 
+    name = html.escape(user.first_name or "amigo")
     await message.reply_text(
-        "🔒 <b>Acesso restrito</b>\n\n"
-        f"Para usar o bot, você precisa entrar primeiro em {_required_channel_label()}.\n"
-        "Depois de entrar no canal, tente novamente.",
+        f"🛑 <b>Calma aí, {name}</b>\n\n"
+        "Para usar este comando, você precisa entrar nos meus canais primeiro.\n\n"
+        "Assim você fica por dentro das novidades, avisos e atualizações.\n\n"
+        "Clique abaixo, entre nos canais da pasta e volte para tentar novamente.",
         parse_mode="HTML",
         reply_markup=_channel_keyboard(),
     )

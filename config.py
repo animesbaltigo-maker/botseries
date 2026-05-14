@@ -64,6 +64,11 @@ def _env_bool(name: str, default: bool) -> bool:
     return default
 
 
+def _env_str_list(name: str, default: str) -> list[str]:
+    raw = os.getenv(name, default).replace(";", ",")
+    return [item.strip() for item in raw.split(",") if item.strip()]
+
+
 def _normalize_telegram_url(value: str) -> str:
     raw = (value or "").strip()
     if not raw:
@@ -104,9 +109,13 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
 TMDB_API_KEY = os.getenv("TMDB_API_KEY", "").strip()
 TMDB_ACCESS_TOKEN = os.getenv("TMDB_ACCESS_TOKEN", "").strip()
 
-REQUIRED_CHANNEL = os.getenv("REQUIRED_CHANNEL", "").strip()
+REQUIRED_CHANNEL = os.getenv("REQUIRED_CHANNEL", "@Series_Brazil").strip()
+REQUIRED_CHANNELS = _env_str_list(
+    "REQUIRED_CHANNELS",
+    "@AtualizacoesOn,@Series_Brazil,@TvGlobinhos,@QG_BALTIGO",
+)
 REQUIRED_CHANNEL_URL = _normalize_telegram_url(
-    os.getenv("REQUIRED_CHANNEL_URL", "").strip() or REQUIRED_CHANNEL
+    os.getenv("REQUIRED_CHANNEL_FOLDER_URL", "https://t.me/addlist/UCI697lVhP9iOWUx").strip() or REQUIRED_CHANNEL
 )
 CANAL_POSTAGEM = os.getenv("CANAL_POSTAGEM", "").strip()
 
