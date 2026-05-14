@@ -66,23 +66,24 @@ def _channel_label(channel: str) -> str:
     return f"📢 {clean or 'Canal'}"
 
 
-def _channel_keyboard() -> InlineKeyboardMarkup:
+def _channel_keyboard(channels: list[str]) -> InlineKeyboardMarkup:
     buttons = [
         InlineKeyboardButton(_channel_label(channel), url=_channel_url(channel))
-        for channel in REQUIRED_CHANNELS
+        for channel in channels
     ]
     rows = [buttons[index : index + 2] for index in range(0, len(buttons), 2)]
     return InlineKeyboardMarkup(rows)
 
 
-async def is_user_in_required_channel(bot, user_id: int) -> bool:
+async def missing_required_channels(bot, user_id: int) -> list[str]:
     if not REQUIRED_CHANNELS:
-        return True
+        return []
 
     cached = _cache_get(user_id)
-    if cached is not None:
-        return cached
+    if cached is True:
+        return []
 
+    missing: list[str] = []
     for channel in REQUIRED_CHANNELS:
         try:
             member = await bot.get_chat_member(channel, user_id)
@@ -93,8 +94,8 @@ async def is_user_in_required_channel(bot, user_id: int) -> bool:
                 channel,
                 exc_info=exc,
             )
-            _cache_set(user_id, False)
-            return False
+            missing.append(channel)
+            continue
 
         if not _is_member_allowed(member):
             LOGGER.info(
@@ -104,11 +105,14 @@ async def is_user_in_required_channel(bot, user_id: int) -> bool:
                 getattr(member, "status", None),
                 getattr(member, "is_member", None),
             )
-            _cache_set(user_id, False)
-            return False
+            missing.append(channel)
 
-    _cache_set(user_id, True)
-    return True
+    _cache_set(user_id, not missing)
+    return missing
+
+
+async def is_user_in_required_channel(bot, user_id: int) -> bool:
+    return not await missing_required_channels(bot, user_id)
 
 
 async def ensure_channel_membership(
@@ -123,8 +127,8 @@ async def ensure_channel_membership(
     if not user:
         return False
 
-    allowed = await is_user_in_required_channel(context.bot, user.id)
-    if allowed:
+    missing_channels = await missing_required_channels(context.bot, user.id)
+    if not missing_channels:
         return True
 
     if not message:
@@ -137,6 +141,6 @@ async def ensure_channel_membership(
         "É por lá que eu aviso novidades, lançamentos e atualizações importantes.\n\n"
         "Entre nos canais abaixo e envie o comando novamente.",
         parse_mode="HTML",
-        reply_markup=_channel_keyboard(),
+        reply_markup=_channel_keyboard(missing_channels),
     )
     return False
