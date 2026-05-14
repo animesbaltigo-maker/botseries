@@ -4,6 +4,7 @@ from pathlib import Path
 from telegram import Update
 from telegram.ext import (
     Application,
+    ApplicationHandlerStop,
     CallbackQueryHandler,
     CommandHandler,
     ContextTypes,
@@ -57,6 +58,7 @@ from services.catalog_client import close_catalog_client
 from services.episode_delivery import init_episode_delivery_db
 from services.referral_db import init_referral_db
 from services.subscriptions import init_subscriptions_db
+from utils.gatekeeper import ensure_channel_membership
 
 init_metrics_db()
 init_referral_db()
@@ -105,6 +107,11 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
         pass
 
 
+async def required_channel_guard(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not await ensure_channel_membership(update, context):
+        raise ApplicationHandlerStop
+
+
 def _register_jobs(app: Application) -> None:
     if not app.job_queue:
         LOGGER.warning("JobQueue nao disponivel.")
@@ -145,6 +152,7 @@ def main() -> None:
 
     app.add_handler(CallbackQueryHandler(control_block_callback_guard, pattern=r".*"), group=-100)
     app.add_handler(MessageHandler(filters.ALL, control_block_message_guard), group=-100)
+    app.add_handler(MessageHandler(filters.COMMAND, required_channel_guard), group=-90)
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("buscar", buscar))
