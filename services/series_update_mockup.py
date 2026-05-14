@@ -8,10 +8,10 @@ from PIL import Image, ImageDraw
 BASE_DIR = Path(__file__).resolve().parent.parent
 MOCKUP_PATH = BASE_DIR / "assets" / "series_update_mockup.png"
 
-IMAGE_X = 952
-IMAGE_Y = 78
-IMAGE_WIDTH = 683
-IMAGE_HEIGHT = 803
+IMAGE_X = 1003
+IMAGE_Y = 73
+IMAGE_WIDTH = 542
+IMAGE_HEIGHT = 796
 IMAGE_ZOOM = 1.02
 IMAGE_BORDER_RADIUS = 32
 
