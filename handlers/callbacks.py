@@ -126,7 +126,7 @@ def _owner_request_key(user, session_token: str) -> str:
 
 def _is_watch_locked_for_user(user) -> bool:
     user_id = getattr(user, "id", 0) or 0
-    if _has_subscription_access(user):
+    if _has_content_access(user):
         return False
     return is_watch_block_active_for_user(user_id)
 
@@ -145,6 +145,10 @@ def _offline_referral_progress(user_id: int) -> tuple[bool, int, int]:
 
 
 def _has_offline_download_access(user) -> bool:
+    return _has_content_access(user)
+
+
+def _has_content_access(user) -> bool:
     user_id = getattr(user, "id", 0) or 0
     if _has_subscription_access(user):
         return True
@@ -425,25 +429,43 @@ def _watch_block_promo_key(query) -> str:
     return f"{chat_id}:{user_id}"
 
 
-def _watch_block_alert_text() -> str:
-    return f"🔒 Disponível apenas para assinantes da {WATCH_BLOCK_BRAND}."
+def _watch_block_alert_text(user_id: int = 0) -> str:
+    _, current, required = _offline_referral_progress(user_id)
+    missing = max(0, required - current)
+    return f"Faltam {missing} indicacao(oes) ou uma assinatura ativa."
 
 
-def _watch_block_message_text() -> str:
+def _watch_block_message_text(user_id: int = 0) -> str:
     brand = html.escape(WATCH_BLOCK_BRAND)
+    _, current, required = _offline_referral_progress(user_id)
+    missing = max(0, required - current)
+    link = _offline_referral_url(user_id) if user_id else ""
+    link_block = f"\n\n<b>Seu link:</b>\n<code>{html.escape(link)}</code>" if link else ""
     return (
-        f"🔒 <b>Conteúdo exclusivo para assinantes da {brand}</b>\n\n"
-        "Esse filme ou episódio está bloqueado aqui no bot no momento.\n\n"
-        f"Para assistir com acesso liberado, suporte e catálogo dedicado, assine a "
-        f"<b>{brand}</b> pelo botão abaixo."
+        f"🔒 <b>Conteúdo exclusivo da {brand}</b>\n\n"
+        "Libere este filme ou episódio de duas formas:\n\n"
+        f"• Indique <b>{required}</b> pessoas diferentes usando seu link\n"
+        "• Ou assine um dos planos abaixo\n\n"
+        f"<b>Seu progresso:</b> <code>{current}/{required}</code>\n"
+        f"<b>Faltam:</b> <code>{missing}</code>"
+        f"{link_block}"
     )
 
 
 def _watch_block_keyboard(user_id: int = 0) -> InlineKeyboardMarkup:
+    link = _offline_referral_url(user_id) if user_id else ""
+    share_url = (
+        "https://t.me/share/url?"
+        f"url={quote_plus(link)}"
+        "&text=" + quote_plus("Vem assistir series e filmes comigo:")
+    ) if link else ""
     rows = [
         [InlineKeyboardButton(option["label"], url=option["url"])]
         for option in get_checkout_options(user_id)
     ]
+    if link:
+        rows.insert(0, [_copy_text_button("Copiar meu link", link)])
+        rows.insert(1, [InlineKeyboardButton("Compartilhar meu link", url=share_url)])
     rows.append([InlineKeyboardButton("Ja paguei / verificar", callback_data="subcheck")])
     if not rows or (len(rows) == 1 and WATCH_BLOCK_URL):
         rows.insert(0, [InlineKeyboardButton(f"Assinar {WATCH_BLOCK_BRAND}", url=WATCH_BLOCK_URL)])
@@ -466,7 +488,7 @@ async def _send_watch_block_message(query) -> None:
 
     try:
         await message.reply_text(
-            _watch_block_message_text(),
+            _watch_block_message_text(user_id),
             parse_mode="HTML",
             reply_markup=_watch_block_keyboard(user_id),
             disable_web_page_preview=True,
@@ -478,7 +500,8 @@ async def _send_watch_block_message(query) -> None:
 
 async def _show_watch_blocked(query, reply_markup) -> None:
     await _restore_reply_markup(getattr(query, "message", None), reply_markup)
-    await _safe_answer(query, _watch_block_alert_text(), show_alert=True)
+    user_id = getattr(getattr(query, "from_user", None), "id", 0) or 0
+    await _safe_answer(query, _watch_block_alert_text(user_id), show_alert=True)
     await _send_watch_block_message(query)
 
 
