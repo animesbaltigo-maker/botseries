@@ -216,7 +216,7 @@ async def _upload_big_file_parallel(path: Path, progress_callback: ProgressCallb
     part_size = 512 * 1024
     total_parts = (file_size + part_size - 1) // part_size
     file_id = random.randrange(-(2**63), 2**63)
-    workers = max(1, TELETHON_PARALLEL_UPLOAD_WORKERS)
+    workers = _upload_workers_for_size(file_size, TELETHON_PARALLEL_UPLOAD_WORKERS)
 
     next_part = 0
     completed = 0
@@ -252,6 +252,19 @@ async def _upload_big_file_parallel(path: Path, progress_callback: ProgressCallb
     await asyncio.gather(*(worker() for _ in range(workers)))
     await _emit_progress(progress_callback, file_size, file_size)
     return InputFileBig(file_id, total_parts, path.name)
+
+
+def _upload_workers_for_size(size: int, configured_workers: int) -> int:
+    mb = size / 1024 / 1024
+    if mb < 100:
+        recommended = 2
+    elif mb < 700:
+        recommended = 4
+    elif mb < 1900:
+        recommended = 6
+    else:
+        recommended = 8
+    return max(1, min(max(1, configured_workers), recommended))
 
 
 async def _send_media_request(

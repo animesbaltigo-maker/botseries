@@ -726,9 +726,13 @@ async def _process_job(app, job: VideoDownloadJob) -> None:
     if not entry:
         return
     path = None
+    started_at = time.monotonic()
+    downloaded_at = started_at
+    archived_at = started_at
     try:
         await _progress(entry, job, 0, None)
         path = await _download_file(job, entry)
+        downloaded_at = time.monotonic()
         for message in list(entry["status_messages"]):
             await _safe_edit(
                 message,
@@ -748,6 +752,7 @@ async def _process_job(app, job: VideoDownloadJob) -> None:
                 if archive_entry:
                     index[key] = archive_entry
                     _save_archive_index(index)
+        archived_at = time.monotonic()
 
         for waiter in entry["waiters"]:
             last_upload_update = 0.0
@@ -765,6 +770,15 @@ async def _process_job(app, job: VideoDownloadJob) -> None:
                 copied = await _copy_archived_video(app.bot, waiter["chat_id"], archive_entry, waiter["caption"])
             if not copied:
                 await _send_video_safe(app.bot, waiter["chat_id"], path, waiter["caption"], progress_cb=progress_cb)
+        delivered_at = time.monotonic()
+        print(
+            "[VIDEO_TIMING] "
+            f"key={key} size={path.stat().st_size if path else 0} "
+            f"download={downloaded_at - started_at:.1f}s "
+            f"archive={archived_at - downloaded_at:.1f}s "
+            f"deliver={delivered_at - archived_at:.1f}s "
+            f"total={delivered_at - started_at:.1f}s"
+        )
 
         for message in list(entry["status_messages"]):
             await _safe_edit(

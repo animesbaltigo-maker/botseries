@@ -64,6 +64,13 @@ def _env_bool(name: str, default: bool) -> bool:
     return default
 
 
+def _env_str_list(name: str, default: list[str] | tuple[str, ...] = ()) -> list[str]:
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        return list(default)
+    return [item.strip() for item in raw.split(",") if item.strip()]
+
+
 def _normalize_telegram_url(value: str) -> str:
     raw = (value or "").strip()
     if not raw:
@@ -105,6 +112,7 @@ TMDB_API_KEY = os.getenv("TMDB_API_KEY", "").strip()
 TMDB_ACCESS_TOKEN = os.getenv("TMDB_ACCESS_TOKEN", "").strip()
 
 REQUIRED_CHANNEL = os.getenv("REQUIRED_CHANNEL", "").strip()
+REQUIRED_CHANNELS = _env_str_list("REQUIRED_CHANNELS", [REQUIRED_CHANNEL] if REQUIRED_CHANNEL else [])
 REQUIRED_CHANNEL_URL = _normalize_telegram_url(
     os.getenv("REQUIRED_CHANNEL_URL", "").strip() or REQUIRED_CHANNEL
 )
@@ -171,8 +179,8 @@ VIDEO_DOWNLOAD_QUEUE_LIMIT = _env_int("VIDEO_DOWNLOAD_QUEUE_LIMIT", 20)
 VIDEO_DOWNLOAD_WORKERS = _env_int("VIDEO_DOWNLOAD_WORKERS", 2)
 VIDEO_DOWNLOAD_CHUNK_MB = _env_int("VIDEO_DOWNLOAD_CHUNK_MB", 8)
 VIDEO_DOWNLOAD_PARALLEL = _env_bool("VIDEO_DOWNLOAD_PARALLEL", True)
-VIDEO_DOWNLOAD_PARALLEL_WORKERS = _env_int("VIDEO_DOWNLOAD_PARALLEL_WORKERS", 8)
-VIDEO_DOWNLOAD_PART_MB = _env_int("VIDEO_DOWNLOAD_PART_MB", 8)
+VIDEO_DOWNLOAD_PARALLEL_WORKERS = _env_int("VIDEO_DOWNLOAD_PARALLEL_WORKERS", 6)
+VIDEO_DOWNLOAD_PART_MB = _env_int("VIDEO_DOWNLOAD_PART_MB", 16)
 VIDEO_DOWNLOAD_TRUST_ENV = _env_bool("VIDEO_DOWNLOAD_TRUST_ENV", False)
 VIDEO_DOWNLOAD_CACHE_DIR = os.getenv("VIDEO_DOWNLOAD_CACHE_DIR", str(DATA_DIR / "video_cache")).strip()
 VIDEO_CACHE_TTL_HOURS = _env_int("VIDEO_CACHE_TTL_HOURS", 1)
