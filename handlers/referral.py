@@ -2,10 +2,21 @@ import html
 from urllib.parse import quote
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+try:
+    from telegram import CopyTextButton
+except Exception:
+    CopyTextButton = None
 from telegram.ext import ContextTypes
 
 from config import BOT_USERNAME
-from services.referral_db import referral_stats, referral_ranking
+from services.referral_db import create_referral, referral_stats, referral_ranking
+
+
+def _copy_text_button(label: str, text: str) -> InlineKeyboardButton:
+    payload = str(text or "")[:256]
+    if CopyTextButton is not None:
+        return InlineKeyboardButton(label, copy_text=CopyTextButton(text=payload))
+    return InlineKeyboardButton(label, api_kwargs={"copy_text": {"text": payload}})
 
 
 def _name(row):
@@ -23,7 +34,8 @@ async def _send_panel(message, user_id):
 
     stats = referral_stats(user_id)
 
-    link = f"https://t.me/{BOT_USERNAME}?start=ref_{user_id}"
+    ref_code = create_referral(user_id)
+    link = f"https://t.me/{BOT_USERNAME}?start=ref_{ref_code}"
 
     telegram_share = (
         "https://t.me/share/url?"
@@ -80,6 +92,7 @@ async def _send_panel(message, user_id):
     )
 
     keyboard = InlineKeyboardMarkup([
+        [_copy_text_button("Copiar meu link", link)],
         [InlineKeyboardButton("📨 Compartilhar no Telegram",url=telegram_share)],
         [InlineKeyboardButton("📦 Compartilhar no WhatsApp",url=whatsapp_share)]
     ])

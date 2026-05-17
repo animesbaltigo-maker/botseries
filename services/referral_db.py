@@ -250,6 +250,19 @@ def referral_stats(user_id: int) -> dict:
     }
 
 
+def referral_distinct_clicks(user_id: int) -> int:
+    with _conn() as conn:
+        row = conn.execute(
+            """
+            SELECT COUNT(DISTINCT referred_user_id) AS n
+            FROM referrals
+            WHERE referrer_id = ?
+            """,
+            (user_id,),
+        ).fetchone()
+    return int(row["n"] if row else 0)
+
+
 def referral_ranking(limit: int = 3) -> list[dict]:
     with _conn() as conn:
         rows = conn.execute(

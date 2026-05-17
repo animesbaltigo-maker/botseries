@@ -5,14 +5,20 @@ import html
 import re
 import secrets
 import time
-from urllib.parse import urlparse
+from urllib.parse import quote_plus, urlparse
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+try:
+    from telegram import CopyTextButton
+except Exception:
+    CopyTextButton = None
 from telegram.ext import ContextTypes
 
 from config import (
     ADMIN_IDS,
+    BOT_USERNAME,
     EPISODES_PER_PAGE,
+    OFFLINE_REFERRAL_REQUIRED_CLICKS,
     SEARCH_SESSION_TTL_SECONDS,
     WATCH_BLOCK_BRAND,
     WATCH_BLOCK_PROMO_COOLDOWN,
@@ -24,6 +30,7 @@ from handlers.discover import callback_launches, callback_random
 from handlers.search import _build_results_keyboard, _build_search_text, get_search_session
 from services.cakto_gateway import get_checkout_options
 from services.metrics import log_event, mark_user_seen
+from services.referral_db import create_referral, referral_distinct_clicks
 from services.watch_guard import is_watch_block_active_for_user
 from services.subscriptions import is_active_subscriber
 from services.catalog_client import (
@@ -129,6 +136,73 @@ def _has_subscription_access(user) -> bool:
     if user_id in ADMIN_IDS:
         return True
     return bool(user_id and is_active_subscriber(user_id))
+
+
+def _offline_referral_progress(user_id: int) -> tuple[bool, int, int]:
+    required = max(1, int(OFFLINE_REFERRAL_REQUIRED_CLICKS or 3))
+    current = referral_distinct_clicks(user_id)
+    return current >= required, current, required
+
+
+def _has_offline_download_access(user) -> bool:
+    user_id = getattr(user, "id", 0) or 0
+    if _has_subscription_access(user):
+        return True
+    if not user_id:
+        return False
+    unlocked, _, _ = _offline_referral_progress(user_id)
+    return unlocked
+
+
+def _copy_text_button(label: str, text: str) -> InlineKeyboardButton:
+    payload = str(text or "")[:256]
+    if CopyTextButton is not None:
+        return InlineKeyboardButton(label, copy_text=CopyTextButton(text=payload))
+    return InlineKeyboardButton(label, api_kwargs={"copy_text": {"text": payload}})
+
+
+def _offline_referral_url(user_id: int) -> str:
+    username = (BOT_USERNAME or "SeriesBrazilBot").strip().lstrip("@")
+    ref_code = create_referral(user_id)
+    return f"https://t.me/{username}?start=ref_{ref_code}"
+
+
+async def _send_offline_unlock_gate(query, user, title: str = "") -> None:
+    user_id = getattr(user, "id", 0) or 0
+    unlocked, current, required = _offline_referral_progress(user_id)
+    if unlocked:
+        return
+    missing = max(0, required - current)
+    link = _offline_referral_url(user_id)
+    share_url = (
+        "https://t.me/share/url?"
+        f"url={quote_plus(link)}"
+        "&text=" + quote_plus("Vem baixar series e filmes comigo:")
+    )
+    rows = [
+        [_copy_text_button("Copiar meu link", link)],
+        [InlineKeyboardButton("Compartilhar meu link", url=share_url)],
+    ]
+    rows.extend([[InlineKeyboardButton(option["label"], url=option["url"])] for option in get_checkout_options(user_id)])
+    rows.append([InlineKeyboardButton("Ja paguei / verificar", callback_data="subcheck")])
+    media_line = f"\n<b>Conteudo:</b> <i>{html.escape(title)}</i>" if title else ""
+    text = (
+        "<b>Download offline bloqueado</b>\n"
+        f"{media_line}\n\n"
+        f"Indique <b>{required}</b> pessoas diferentes ou assine um plano para liberar.\n\n"
+        f"<b>Seu progresso:</b> <code>{current}/{required}</code>\n"
+        f"<b>Faltam:</b> <code>{missing}</code>\n\n"
+        "<b>Seu link:</b>\n"
+        f"<code>{html.escape(link)}</code>"
+    )
+    await query.answer(f"Faltam {missing} indicacao(oes) ou uma assinatura ativa.", show_alert=True)
+    if query.message:
+        await query.message.reply_text(
+            text,
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(rows),
+            disable_web_page_preview=True,
+        )
 
 
 def _is_temporary_player_url(url: str) -> bool:
@@ -1490,9 +1564,9 @@ async def _handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         if _is_watch_locked_for_user(user):
             await _show_watch_blocked(query, original_markup)
             return
-        if not _has_subscription_access(user):
+        if not _has_offline_download_access(user):
             await _restore_reply_markup(getattr(query, "message", None), original_markup)
-            await send_offline_paywall(query, user, str(session.get("title") or ""))
+            await _send_offline_unlock_gate(query, user, str(session.get("title") or ""))
             return
 
         try:
@@ -1567,9 +1641,9 @@ async def _handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         if _is_watch_locked_for_user(user):
             await _show_watch_blocked(query, original_markup)
             return
-        if not _has_subscription_access(user):
+        if not _has_offline_download_access(user):
             await _restore_reply_markup(getattr(query, "message", None), original_markup)
-            await send_offline_paywall(query, user, str(session.get("title") or ""))
+            await _send_offline_unlock_gate(query, user, str(session.get("title") or ""))
             return
 
         try:
@@ -1588,11 +1662,12 @@ async def _handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         episode = episodes[episode_idx]
         player_links = episode.get("player_links") if isinstance(episode, dict) else {}
         selected_audio = str(session.get("selected_audio") or session.get("default_audio") or "").strip().lower()
-        if not isinstance(player_links, dict) or not player_links:
+        if not _should_reuse_player_links(player_links):
             try:
-                player_links = await asyncio.wait_for(
-                    get_player_links(str(episode.get("url") or ""), preferred_audio=selected_audio),
-                    timeout=18,
+                player_links = await _fetch_unique_player_links(
+                    str(episode.get("url") or ""),
+                    selected_audio,
+                    _owner_request_key(user, f"{session_token}:dl:{season}:{episode_idx}"),
                 )
             except Exception as exc:
                 print("ERRO DOWNLOAD PLAYER LINKS:", repr(exc))

@@ -196,6 +196,13 @@ VIDEO_SEND_TIMEOUT = _env_int("VIDEO_SEND_TIMEOUT", 3600)
 VIDEO_TMP_DIR = Path(os.getenv("VIDEO_TMP_DIR", str(DATA_DIR / "video_tmp")).strip())
 VIDEO_TMP_DIR.mkdir(parents=True, exist_ok=True)
 EPISODE_CACHE_CHAT_ID = os.getenv("EPISODE_CACHE_CHAT_ID", "").strip()
+DOWNLOAD_ARCHIVE_CHANNEL = (
+    os.getenv("DOWNLOAD_ARCHIVE_CHANNEL", "").strip()
+    or EPISODE_CACHE_CHAT_ID
+    or "-1003746698711"
+)
+VIDEO_DOWNLOAD_ARIA2 = _env_bool("VIDEO_DOWNLOAD_ARIA2", True)
+OFFLINE_REFERRAL_REQUIRED_CLICKS = _env_int("OFFLINE_REFERRAL_REQUIRED_CLICKS", 3)
 
 WATCH_BLOCK_BRAND = os.getenv("WATCH_BLOCK_BRAND", "BaltigoFlix").strip() or "BaltigoFlix"
 WATCH_BLOCK_URL = (

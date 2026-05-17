@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import html
+import json
 import re
 import shutil
 import time
@@ -15,6 +16,8 @@ from telegram.error import TelegramError, TimedOut
 from config import (
     SOURCE_SITE_BASE,
     TELETHON_UPLOAD_MAX_MB,
+    DOWNLOAD_ARCHIVE_CHANNEL,
+    VIDEO_DOWNLOAD_ARIA2,
     VIDEO_CACHE_CLEANUP_INTERVAL_SECONDS,
     VIDEO_CACHE_TTL_HOURS,
     VIDEO_DOWNLOAD_CHUNK_MB,
@@ -72,10 +75,94 @@ _cleanup_task: asyncio.Task | None = None
 _active_jobs: dict[str, dict] = {}
 _active_user_jobs: dict[int, str] = {}
 _enqueue_lock = asyncio.Lock()
+_archive_lock = asyncio.Lock()
+
+ARCHIVE_INDEX_PATH = Path(VIDEO_DOWNLOAD_CACHE_DIR).parent / "series_file_ids.json"
 
 
 def _job_key(content_id: str, item_label: str, quality: str) -> str:
     return f"{content_id}|{item_label}|{quality}".lower()
+
+
+def _archive_chat_id() -> int | str:
+    raw = str(DOWNLOAD_ARCHIVE_CHANNEL or "").strip()
+    if raw.lstrip("-").isdigit():
+        return int(raw)
+    return raw
+
+
+def _load_archive_index() -> dict:
+    if not ARCHIVE_INDEX_PATH.exists():
+        return {}
+    try:
+        data = json.loads(ARCHIVE_INDEX_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _save_archive_index(data: dict) -> None:
+    ARCHIVE_INDEX_PATH.parent.mkdir(parents=True, exist_ok=True)
+    tmp = ARCHIVE_INDEX_PATH.with_suffix(".tmp")
+    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+    tmp.replace(ARCHIVE_INDEX_PATH)
+
+
+def _message_id_from_sent(sent) -> int | None:
+    if isinstance(sent, (list, tuple)) and sent:
+        sent = sent[0]
+    for attr in ("message_id", "id"):
+        value = getattr(sent, attr, None)
+        if value:
+            try:
+                return int(value)
+            except Exception:
+                return None
+    return None
+
+
+async def _copy_archived_video(bot, chat_id: int, entry: dict, caption: str) -> bool:
+    message_id = entry.get("archive_message_id")
+    archive_chat_id = entry.get("archive_chat_id") or DOWNLOAD_ARCHIVE_CHANNEL
+    if not message_id or not archive_chat_id:
+        return False
+    try:
+        await bot.copy_message(
+            chat_id=chat_id,
+            from_chat_id=archive_chat_id,
+            message_id=int(message_id),
+            caption=caption,
+            parse_mode="HTML",
+            protect_content=VIDEO_DOWNLOAD_PROTECT_CONTENT,
+        )
+        return True
+    except Exception as error:
+        print(f"[VIDEO_ARCHIVE] copy_failed key_entry={entry!r} error={error!r}")
+        return False
+
+
+async def _archive_downloaded_video(app, job: VideoDownloadJob, path: Path) -> dict:
+    archive_chat_id = _archive_chat_id()
+    if not archive_chat_id:
+        return {}
+    archive_caption = (
+        f"{job.caption}\n\n"
+        f"<code>{html.escape(_job_key(job.content_id, job.item_label, job.quality))}</code>"
+    )
+    sent = await _send_video_safe(app.bot, archive_chat_id, path, archive_caption, protect_content=False)
+    message_id = _message_id_from_sent(sent)
+    if not message_id:
+        return {}
+    return {
+        "archive_chat_id": str(archive_chat_id),
+        "archive_message_id": message_id,
+        "content_id": job.content_id,
+        "item_label": job.item_label,
+        "quality": job.quality,
+        "title": job.title,
+        "caption": job.caption,
+        "created_at": int(time.time()),
+    }
 
 
 def _safe_filename(value: str, fallback: str = "video") -> str:
@@ -107,6 +194,37 @@ def _human_size(value: int | None) -> str:
     if mb < 1024:
         return f"{mb:.1f} MB"
     return f"{mb / 1024:.2f} GB"
+
+
+def _parse_aria2_size(value: str) -> int | None:
+    match = re.match(r"\s*([0-9.]+)\s*([KMGT]?i?B)?\s*$", value or "", flags=re.IGNORECASE)
+    if not match:
+        return None
+    number = float(match.group(1))
+    unit = (match.group(2) or "B").lower()
+    multiplier = {
+        "b": 1,
+        "kb": 1000,
+        "kib": 1024,
+        "mb": 1000**2,
+        "mib": 1024**2,
+        "gb": 1000**3,
+        "gib": 1024**3,
+        "tb": 1000**4,
+        "tib": 1024**4,
+    }.get(unit, 1)
+    return int(number * multiplier)
+
+
+def _parse_aria2_progress(line: str, current: int, total: int | None) -> tuple[int, int | None]:
+    match = re.search(
+        r"(?P<current>[0-9.]+\s*[KMGT]?i?B)/(?P<total>[0-9.]+\s*[KMGT]?i?B)\((?P<pct>\d+)%\)",
+        line,
+        re.IGNORECASE,
+    )
+    if not match:
+        return current, total
+    return _parse_aria2_size(match.group("current")) or current, _parse_aria2_size(match.group("total")) or total
 
 
 def _progress_bar(done: int, total: int | None, width: int = 10) -> str:
@@ -292,7 +410,18 @@ async def _download_single_file(job: VideoDownloadJob, entry: dict) -> Path:
         if total:
             _raise_if_too_large_for_upload(total)
 
-        if VIDEO_DOWNLOAD_PARALLEL and probe["range"] and total and total >= PART_SIZE * 2:
+        aria2c = shutil.which("aria2c")
+        if VIDEO_DOWNLOAD_ARIA2 and aria2c and total and total >= PART_SIZE * 2:
+            try:
+                await _download_file_aria2(aria2c, job, entry, temp, total)
+            except Exception as error:
+                print(f"[VIDEO_DOWNLOAD] aria2_fallback error={error!r}")
+                temp.unlink(missing_ok=True)
+                if VIDEO_DOWNLOAD_PARALLEL and probe["range"] and total and total >= PART_SIZE * 2:
+                    await _download_file_parallel(client, job, entry, temp, total)
+                else:
+                    await _download_file_stream(client, job, entry, temp, total)
+        elif VIDEO_DOWNLOAD_PARALLEL and probe["range"] and total and total >= PART_SIZE * 2:
             await _download_file_parallel(client, job, entry, temp, total)
         else:
             await _download_file_stream(client, job, entry, temp, total)
@@ -412,6 +541,61 @@ async def _download_file_parallel(
         raise RuntimeError("O download terminou com tamanho diferente do esperado.")
 
 
+async def _download_file_aria2(aria2c: str, job: VideoDownloadJob, entry: dict, temp: Path, total: int | None) -> None:
+    await _progress(entry, job, 0, total)
+    temp.parent.mkdir(parents=True, exist_ok=True)
+    cmd = [
+        aria2c,
+        "--allow-overwrite=true",
+        "--auto-file-renaming=false",
+        "--continue=true",
+        "--file-allocation=none",
+        "--summary-interval=1",
+        "--console-log-level=error",
+        "--show-console-readout=true",
+        f"--max-connection-per-server={max(1, PARALLEL_WORKERS)}",
+        f"--split={max(1, PARALLEL_WORKERS)}",
+        f"--min-split-size={max(1, VIDEO_DOWNLOAD_PART_MB)}M",
+        "--max-tries=3",
+        "--retry-wait=3",
+        f"--user-agent={HEADERS['User-Agent']}",
+        f"--referer={HEADERS['Referer']}",
+        "--dir",
+        str(temp.parent),
+        "--out",
+        temp.name,
+        job.video_url,
+    ]
+    proc = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.STDOUT,
+    )
+    current = 0
+    try:
+        assert proc.stdout is not None
+        while True:
+            line = await proc.stdout.readline()
+            if not line:
+                break
+            current, total = _parse_aria2_progress(line.decode("utf-8", errors="ignore"), current, total)
+            if current:
+                await _progress(entry, job, current, total)
+        code = await proc.wait()
+    except asyncio.CancelledError:
+        proc.kill()
+        await proc.wait()
+        temp.unlink(missing_ok=True)
+        raise
+    if code != 0 or not temp.exists():
+        temp.unlink(missing_ok=True)
+        raise RuntimeError("O aria2c nao conseguiu concluir o download.")
+    size = temp.stat().st_size
+    if size > MAX_BYTES:
+        temp.unlink(missing_ok=True)
+        raise RuntimeError(f"Arquivo passou do limite de {_human_size(MAX_BYTES)}.")
+
+
 async def _download_hls(job: VideoDownloadJob, entry: dict, target: Path, temp: Path) -> Path:
     ffmpeg = shutil.which("ffmpeg")
     if not ffmpeg:
@@ -457,8 +641,17 @@ async def _delete_downloaded_file(path: Path | None) -> None:
         print(f"[VIDEO_CACHE] delete_downloaded_error={error!r}")
 
 
-async def _send_video_safe(bot, chat_id: int, path: Path, caption: str, progress_cb=None) -> bool:
+async def _send_video_safe(
+    bot,
+    chat_id: int,
+    path: Path,
+    caption: str,
+    progress_cb=None,
+    *,
+    protect_content: bool | None = None,
+) -> bool:
     size = path.stat().st_size
+    effective_protect = VIDEO_DOWNLOAD_PROTECT_CONTENT if protect_content is None else bool(protect_content)
     if telethon_configured():
         if size > TELETHON_MAX_BYTES:
             raise RuntimeError(f"Arquivo maior que o limite Telethon configurado: {_human_size(size)} > {_human_size(TELETHON_MAX_BYTES)}.")
@@ -468,10 +661,10 @@ async def _send_video_safe(bot, chat_id: int, path: Path, caption: str, progress
             caption,
             as_video=True,
             progress_callback=progress_cb,
-            protect_content=VIDEO_DOWNLOAD_PROTECT_CONTENT,
+            protect_content=effective_protect,
         )
         if sent:
-            return True
+            return sent
         if size > UPLOAD_MAX_BYTES:
             reason = last_telethon_error() or "erro desconhecido"
             raise RuntimeError(
@@ -488,20 +681,20 @@ async def _send_video_safe(bot, chat_id: int, path: Path, caption: str, progress
 
     try:
         with open(path, "rb") as file:
-            await bot.send_video(
+            sent = await bot.send_video(
                 chat_id=chat_id,
                 video=file,
                 filename=path.name,
                 caption=caption,
                 parse_mode="HTML",
                 supports_streaming=True,
-                protect_content=VIDEO_DOWNLOAD_PROTECT_CONTENT,
+                protect_content=effective_protect,
                 read_timeout=120,
                 write_timeout=120,
                 connect_timeout=30,
                 pool_timeout=30,
             )
-        return True
+        return sent
     except TimedOut:
         try:
             await bot.send_message(chat_id, "O envio demorou mais que o esperado. Confere se o video ja chegou.")
@@ -512,19 +705,19 @@ async def _send_video_safe(bot, chat_id: int, path: Path, caption: str, progress
         if "request entity too large" in str(error).lower():
             raise RuntimeError("O Telegram recusou o upload porque o arquivo e grande demais para o Bot API oficial.") from error
         with open(path, "rb") as file:
-            await bot.send_document(
+            sent = await bot.send_document(
                 chat_id=chat_id,
                 document=file,
                 filename=path.name,
                 caption=caption,
                 parse_mode="HTML",
-                protect_content=VIDEO_DOWNLOAD_PROTECT_CONTENT,
+                protect_content=effective_protect,
                 read_timeout=120,
                 write_timeout=120,
                 connect_timeout=30,
                 pool_timeout=30,
             )
-        return True
+        return sent
 
 
 async def _process_job(app, job: VideoDownloadJob) -> None:
@@ -546,6 +739,16 @@ async def _process_job(app, job: VideoDownloadJob) -> None:
                     f"<b>Tamanho:</b> {_human_size(path.stat().st_size)}"
                 ),
             )
+        archive_entry = {}
+        async with _archive_lock:
+            index = _load_archive_index()
+            archive_entry = index.get(key) or {}
+            if not archive_entry:
+                archive_entry = await _archive_downloaded_video(app, job, path)
+                if archive_entry:
+                    index[key] = archive_entry
+                    _save_archive_index(index)
+
         for waiter in entry["waiters"]:
             last_upload_update = 0.0
 
@@ -557,7 +760,11 @@ async def _process_job(app, job: VideoDownloadJob) -> None:
                 last_upload_update = now
                 await _upload_progress(entry, job, current, total)
 
-            await _send_video_safe(app.bot, waiter["chat_id"], path, waiter["caption"], progress_cb=progress_cb)
+            copied = False
+            if archive_entry:
+                copied = await _copy_archived_video(app.bot, waiter["chat_id"], archive_entry, waiter["caption"])
+            if not copied:
+                await _send_video_safe(app.bot, waiter["chat_id"], path, waiter["caption"], progress_cb=progress_cb)
 
         for message in list(entry["status_messages"]):
             await _safe_edit(
@@ -598,6 +805,37 @@ async def _worker(app, queue: asyncio.Queue) -> None:
 async def enqueue_video_download(app, job: VideoDownloadJob) -> int:
     queue = app.bot_data["video_download_queue"]
     key = _job_key(job.content_id, job.item_label, job.quality)
+    archive_entry = _load_archive_index().get(key) or {}
+    if archive_entry:
+        status = await app.bot.send_message(
+            job.chat_id,
+            (
+                "<b>Enviando video</b>\n\n"
+                f"<b>Titulo:</b> {html.escape(job.title)}\n"
+                f"<b>Item:</b> {html.escape(str(job.item_label))}\n"
+                "Status: <b>encontrado no acervo</b>"
+            ),
+            parse_mode="HTML",
+        )
+        copied = await _copy_archived_video(app.bot, job.chat_id, archive_entry, job.caption)
+        if not copied:
+            try:
+                index = _load_archive_index()
+                index.pop(key, None)
+                _save_archive_index(index)
+            except Exception:
+                pass
+        else:
+            await _safe_edit(
+                status,
+                (
+                    "<b>Video enviado</b>\n\n"
+                    f"<b>Titulo:</b> {html.escape(job.title)}\n"
+                    f"<b>Item:</b> {html.escape(str(job.item_label))}"
+                ),
+            )
+            return queue.qsize()
+
     async with _enqueue_lock:
         if job.user_id in _active_user_jobs:
             raise RuntimeError("Voce ja tem um video em download ou upload. Aguarde terminar para pedir outro.")
