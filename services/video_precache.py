@@ -60,7 +60,7 @@ async def _precache_title(app, query: str) -> int:
             content_id = _episode_delivery_cache_key(session, 1, episode, episode_idx)
             if has_archived_video(content_id, item_label, quality):
                 continue
-            caption = _episode_archive_caption(title, label, 1, _audio_text_label(selected_audio))
+            caption = _episode_archive_caption(title, label, 1, _audio_text_label(selected_audio), quality)
             archived = await archive_video_if_missing(
                 app,
                 VideoDownloadJob(

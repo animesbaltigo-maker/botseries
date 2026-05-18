@@ -233,7 +233,7 @@ def _video_file_id_from_sent(sent) -> str:
     return str(file_id or "").strip()
 
 
-async def _copy_archived_video(bot, chat_id: int, entry: dict, caption: str):
+async def _copy_archived_video(bot, chat_id: int, entry: dict, caption: str, reply_markup=None):
     message_id = entry.get("archive_message_id")
     archive_chat_id = entry.get("archive_chat_id") or DOWNLOAD_ARCHIVE_CHANNEL
     if not message_id or not archive_chat_id:
@@ -245,6 +245,7 @@ async def _copy_archived_video(bot, chat_id: int, entry: dict, caption: str):
             message_id=int(message_id),
             caption=caption,
             parse_mode="HTML",
+            reply_markup=reply_markup,
             protect_content=VIDEO_DOWNLOAD_PROTECT_CONTENT,
         )
     except Exception as error:
@@ -254,7 +255,7 @@ async def _copy_archived_video(bot, chat_id: int, entry: dict, caption: str):
 
 async def _edit_message_to_archived_video(bot, job: VideoDownloadJob, entry: dict):
     file_id = str(entry.get("file_id") or "").strip()
-    media = file_id or str(job.video_url or "").strip()
+    media = file_id
     if not media or not job.target_message_id:
         return None
     try:
@@ -267,6 +268,15 @@ async def _edit_message_to_archived_video(bot, job: VideoDownloadJob, entry: dic
     except Exception as error:
         print(f"[VIDEO_ARCHIVE] edit_failed key_entry={entry!r} error={error!r}")
         return None
+
+
+async def _delete_panel_message(bot, chat_id: int, message_id: int | None) -> None:
+    if not message_id:
+        return
+    try:
+        await bot.delete_message(chat_id=chat_id, message_id=int(message_id))
+    except Exception as error:
+        print(f"[VIDEO_DELIVERY] delete_panel_failed chat_id={chat_id} message_id={message_id} error={error!r}")
 
 
 async def _edit_message_to_video_file(bot, job: VideoDownloadJob, path: Path):
@@ -328,16 +338,28 @@ async def edit_archived_video_message(
         reply_markup=reply_markup,
     )
     edited = await _edit_message_to_archived_video(app.bot, job, archive_entry)
-    if not edited:
+    if edited:
+        _remember_delivered_video(
+            app.bot,
+            user_id=user_id,
+            chat_id=chat_id,
+            sent=edited,
+            content_id=content_id,
+            item_label=item_label,
+            message_id=message_id,
+        )
+        return True
+    copied = await _copy_archived_video(app.bot, chat_id, archive_entry, caption, reply_markup=reply_markup)
+    if not copied:
         return False
+    await _delete_panel_message(app.bot, chat_id, message_id)
     _remember_delivered_video(
         app.bot,
         user_id=user_id,
         chat_id=chat_id,
-        sent=edited,
+        sent=copied,
         content_id=content_id,
         item_label=item_label,
-        message_id=message_id,
     )
     return True
 
@@ -981,8 +1003,16 @@ async def _process_job(app, job: VideoDownloadJob) -> None:
                 )
                 sent = await _edit_message_to_archived_video(app.bot, waiter_job, archive_entry)
                 edited_existing_message = bool(sent)
-                if not sent and not waiter_has_panel:
-                    sent = await _copy_archived_video(app.bot, waiter["chat_id"], archive_entry, waiter["caption"])
+                if not sent:
+                    sent = await _copy_archived_video(
+                        app.bot,
+                        waiter["chat_id"],
+                        archive_entry,
+                        waiter["caption"],
+                        reply_markup=waiter.get("reply_markup"),
+                    )
+                    if sent and waiter_has_panel:
+                        await _delete_panel_message(app.bot, waiter["chat_id"], waiter.get("target_message_id"))
             if not sent:
                 waiter_job = replace(
                     job,
@@ -993,10 +1023,10 @@ async def _process_job(app, job: VideoDownloadJob) -> None:
                 )
                 sent = await _edit_message_to_video_file(app.bot, waiter_job, path)
                 edited_existing_message = bool(sent)
-            if not sent and waiter_has_panel:
-                raise RuntimeError("Nao consegui editar a mensagem original com o video baixado.")
             if not sent:
                 sent = await _send_video_safe(app.bot, waiter["chat_id"], path, waiter["caption"], progress_cb=progress_cb)
+                if sent and waiter_has_panel:
+                    await _delete_panel_message(app.bot, waiter["chat_id"], waiter.get("target_message_id"))
             _remember_delivered_video(
                 app.bot,
                 user_id=waiter["user_id"],
@@ -1073,7 +1103,6 @@ async def enqueue_video_download(app, job: VideoDownloadJob) -> int:
             reply_markup=job.reply_markup,
         ):
             return -1
-        raise RuntimeError("Nao consegui abrir o arquivo salvo nessa mensagem. Tente abrir o episodio novamente.")
 
         status = await app.bot.send_message(
             job.chat_id,

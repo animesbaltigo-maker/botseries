@@ -26,6 +26,7 @@ from config import (
 )
 from core.video_download_queue import (
     VideoDownloadJob,
+    archive_video_if_missing,
     delete_delivered_video_messages,
     edit_archived_video_message,
     enqueue_video_download,
@@ -57,6 +58,8 @@ _RECENT_PLAYER_URLS: dict[str, list[dict]] = {}
 _RECENT_PLAYER_URLS_LOCK = asyncio.Lock()
 _RECENT_PLAYER_URL_TTL = 120.0
 _WATCH_BLOCK_PROMOS: dict[str, float] = {}
+_ADJACENT_PRECACHE_SEMAPHORE = asyncio.Semaphore(1)
+_ADJACENT_PRECACHE_KEYS: set[str] = set()
 
 
 def _now() -> float:
@@ -940,29 +943,123 @@ def _best_download_server(player_links: dict | None, selected_url: str) -> str:
     return "Player"
 
 
-def _movie_archive_caption(title: str, audio_label: str) -> str:
+def _movie_archive_caption(title: str, audio_label: str, source_label: str = "") -> str:
+    source_line = f"\n🗂 <b>Fonte:</b> {html.escape(source_label)}" if source_label else ""
     return (
         f"🎬 <b>{html.escape(title or 'Filme')}</b>\n\n"
         "<blockquote>"
         "🎞️ <b>Tipo:</b> Filme\n"
-        f"🎙️ <b>Idioma:</b> {html.escape(audio_label)}\n"
+        f"🎙️ <b>Idioma:</b> {html.escape(audio_label)}"
+        f"{source_line}\n"
         "🕒 <b>Disponível por:</b> 24h"
         "</blockquote>\n\n"
         "<i>Marque como visto para apagar antes.</i>"
     )
 
 
-def _episode_archive_caption(title: str, label: str, season: int, audio_label: str) -> str:
+def _episode_archive_caption(title: str, label: str, season: int, audio_label: str, source_label: str = "") -> str:
+    source_line = f"\n🗂 <b>Fonte:</b> {html.escape(source_label)}" if source_label else ""
     return (
         f"📺 <b>{html.escape(title or 'Série')}</b>\n\n"
         "<blockquote>"
         f"🎞️ <b>Episódio:</b> {html.escape(label)}\n"
         f"📚 <b>Temporada:</b> {season}\n"
-        f"🎙️ <b>Idioma:</b> {html.escape(audio_label)}\n"
+        f"🎙️ <b>Idioma:</b> {html.escape(audio_label)}"
+        f"{source_line}\n"
         "🕒 <b>Disponível por:</b> 24h"
         "</blockquote>\n\n"
         "<i>Use os botões abaixo para navegar ou marcar como visto.</i>"
     )
+
+
+async def _precache_adjacent_episodes(
+    app,
+    *,
+    session: dict,
+    episodes: list[dict],
+    season: int,
+    episode_idx: int,
+    selected_audio: str,
+) -> None:
+    title = str(session.get("title") or "Série").strip() or "Série"
+    indexes = [episode_idx - 1, episode_idx + 1]
+    try:
+        for neighbor_idx in indexes:
+            if neighbor_idx < 0 or neighbor_idx >= len(episodes):
+                continue
+            episode = episodes[neighbor_idx]
+            if not isinstance(episode, dict):
+                continue
+            player_links = episode.get("player_links") if isinstance(episode.get("player_links"), dict) else {}
+            if not _should_reuse_player_links(player_links):
+                player_links = await _fetch_unique_player_links(
+                    str(episode.get("url") or ""),
+                    selected_audio,
+                    _player_request_key(str(episode.get("url") or ""), f"silent:{selected_audio}:{neighbor_idx}"),
+                )
+            download_candidates = _download_candidates(player_links)
+            player_url = download_candidates[0]["url"] if download_candidates else ""
+            if not player_url or not _is_direct_stream_url(player_url):
+                continue
+            episode_number = _episode_number_value(episode, neighbor_idx)
+            item_label = f"T{season:02d}E{episode_number:02d}"
+            quality = _best_download_server(player_links, player_url)
+            content_id = _episode_delivery_cache_key(session, season, episode, neighbor_idx)
+            if has_archived_video(content_id, item_label, quality):
+                continue
+            label = _episode_display_label(episode, neighbor_idx)
+            caption = _episode_archive_caption(title, label, season, _audio_text_label(selected_audio), quality)
+            async with _ADJACENT_PRECACHE_SEMAPHORE:
+                if has_archived_video(content_id, item_label, quality):
+                    continue
+                await archive_video_if_missing(
+                    app,
+                    VideoDownloadJob(
+                        user_id=0,
+                        chat_id=0,
+                        content_id=content_id,
+                        item_label=item_label,
+                        quality=quality,
+                        title=title,
+                        video_url=player_url,
+                        caption=caption,
+                        video_urls=download_candidates,
+                    ),
+                )
+            await asyncio.sleep(1.0)
+    except Exception as error:
+        print(f"[VIDEO_PRECACHE] adjacent_failed title={title!r} season={season} episode={episode_idx + 1} error={error!r}")
+
+
+def _schedule_adjacent_episode_precache(
+    context: ContextTypes.DEFAULT_TYPE,
+    *,
+    session_token: str,
+    session: dict,
+    episodes: list[dict],
+    season: int,
+    episode_idx: int,
+    selected_audio: str,
+) -> None:
+    key = f"{session_token}:{selected_audio}:{season}:{episode_idx}"
+    if key in _ADJACENT_PRECACHE_KEYS:
+        return
+    _ADJACENT_PRECACHE_KEYS.add(key)
+
+    async def runner() -> None:
+        try:
+            await _precache_adjacent_episodes(
+                context.application,
+                session=dict(session),
+                episodes=[dict(item) if isinstance(item, dict) else item for item in episodes],
+                season=season,
+                episode_idx=episode_idx,
+                selected_audio=selected_audio,
+            )
+        finally:
+            _ADJACENT_PRECACHE_KEYS.discard(key)
+
+    context.application.create_task(runner())
 
 
 def _player_keyboard(
@@ -1297,7 +1394,7 @@ async def _show_movie_player_panel(
             downloads=player_links.get("downloads"),
             show_download=False,
         )
-        caption = _movie_archive_caption(str(session.get("title") or "Filme"), item_label)
+        caption = _movie_archive_caption(str(session.get("title") or "Filme"), item_label, server_label)
         if await edit_archived_video_message(
             context.application,
             user_id=user.id if user else 0,
@@ -1729,7 +1826,7 @@ async def _handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             username=((user.username or user.first_name or "") if user else ""),
             query_text=title,
         )
-        caption = _movie_archive_caption(title, _audio_text_label(selected_audio))
+        caption = _movie_archive_caption(title, _audio_text_label(selected_audio), server_label)
         player_keyboard = _player_keyboard(
             session_token,
             session,
@@ -1837,7 +1934,7 @@ async def _handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             username=((user.username or user.first_name or "") if user else ""),
             query_text=f"{title} - {label}",
         )
-        caption = _episode_archive_caption(title, label, season, _audio_text_label(selected_audio))
+        caption = _episode_archive_caption(title, label, season, _audio_text_label(selected_audio), server_label)
         player_keyboard = _player_keyboard(
             session_token,
             session,
@@ -1871,6 +1968,15 @@ async def _handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             await _restore_reply_markup(getattr(query, "message", None), original_markup)
             await _safe_answer(query, str(error), show_alert=True)
             return
+        _schedule_adjacent_episode_precache(
+            context,
+            session_token=session_token,
+            session=session,
+            episodes=episodes,
+            season=season,
+            episode_idx=episode_idx,
+            selected_audio=selected_audio,
+        )
         if result == -1:
             await _safe_answer(query, "Episodio pronto no Telegram.")
             return
@@ -1975,7 +2081,7 @@ async def _handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                 watch_label=_episode_watch_button_label(episode, episode_idx),
                 show_download=False,
             )
-            archived_caption = _episode_archive_caption(title, label, season, _audio_text_label(selected_audio))
+            archived_caption = _episode_archive_caption(title, label, season, _audio_text_label(selected_audio), server_label)
             if await edit_archived_video_message(
                 context.application,
                 user_id=user.id if user else 0,
@@ -1988,6 +2094,15 @@ async def _handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                 media_url=archive_url,
                 reply_markup=archived_keyboard,
             ):
+                _schedule_adjacent_episode_precache(
+                    context,
+                    session_token=session_token,
+                    session=session,
+                    episodes=episodes,
+                    season=season,
+                    episode_idx=episode_idx,
+                    selected_audio=selected_audio,
+                )
                 await _safe_answer(query)
                 return
         keyboard = _player_keyboard(
