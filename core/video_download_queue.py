@@ -268,6 +268,88 @@ async def _edit_message_to_archived_video(bot, job: VideoDownloadJob, entry: dic
         return None
 
 
+async def _hydrate_archive_file_id(bot, chat_id: int, entry: dict) -> dict:
+    if str(entry.get("file_id") or "").strip():
+        return entry
+    message_id = entry.get("archive_message_id")
+    archive_chat_id = entry.get("archive_chat_id") or DOWNLOAD_ARCHIVE_CHANNEL
+    if not message_id or not archive_chat_id:
+        return entry
+    forwarded = None
+    try:
+        forwarded = await bot.forward_message(
+            chat_id=chat_id,
+            from_chat_id=archive_chat_id,
+            message_id=int(message_id),
+        )
+        file_id = _video_file_id_from_sent(forwarded)
+        if file_id:
+            entry = dict(entry)
+            entry["file_id"] = file_id
+    except Exception as error:
+        print(f"[VIDEO_ARCHIVE] hydrate_failed key_entry={entry!r} error={error!r}")
+    finally:
+        forwarded_id = _message_id_from_sent(forwarded)
+        if forwarded_id:
+            try:
+                await bot.delete_message(chat_id=chat_id, message_id=forwarded_id)
+            except Exception:
+                pass
+    return entry
+
+
+async def edit_archived_video_message(
+    app,
+    *,
+    user_id: int,
+    chat_id: int,
+    message_id: int | None,
+    content_id: str,
+    item_label: str,
+    quality: str,
+    caption: str,
+    reply_markup=None,
+) -> bool:
+    if not message_id:
+        return False
+    key = _job_key(content_id, item_label, quality)
+    async with _archive_lock:
+        index = _load_archive_index()
+        archive_entry = index.get(key) or {}
+        if not archive_entry:
+            return False
+        if not str(archive_entry.get("file_id") or "").strip():
+            archive_entry = await _hydrate_archive_file_id(app.bot, chat_id, archive_entry)
+            if str(archive_entry.get("file_id") or "").strip():
+                index[key] = archive_entry
+                _save_archive_index(index)
+    job = VideoDownloadJob(
+        user_id=user_id,
+        chat_id=chat_id,
+        content_id=content_id,
+        item_label=item_label,
+        quality=quality,
+        title=str(archive_entry.get("title") or ""),
+        video_url="",
+        caption=caption,
+        target_message_id=message_id,
+        reply_markup=reply_markup,
+    )
+    edited = await _edit_message_to_archived_video(app.bot, job, archive_entry)
+    if not edited:
+        return False
+    _remember_delivered_video(
+        app.bot,
+        user_id=user_id,
+        chat_id=chat_id,
+        sent=edited,
+        content_id=content_id,
+        item_label=item_label,
+        message_id=message_id,
+    )
+    return True
+
+
 async def _archive_downloaded_video(app, job: VideoDownloadJob, path: Path) -> dict:
     archive_chat_id = _archive_chat_id()
     if not archive_chat_id:
@@ -971,17 +1053,17 @@ async def enqueue_video_download(app, job: VideoDownloadJob) -> int:
     key = _job_key(job.content_id, job.item_label, job.quality)
     archive_entry = _load_archive_index().get(key) or {}
     if archive_entry:
-        edited = await _edit_message_to_archived_video(app.bot, job, archive_entry)
-        if edited:
-            _remember_delivered_video(
-                app.bot,
-                user_id=job.user_id,
-                chat_id=job.chat_id,
-                sent=edited,
-                content_id=job.content_id,
-                item_label=job.item_label,
-                message_id=job.target_message_id,
-            )
+        if await edit_archived_video_message(
+            app,
+            user_id=job.user_id,
+            chat_id=job.chat_id,
+            message_id=job.target_message_id,
+            content_id=job.content_id,
+            item_label=job.item_label,
+            quality=job.quality,
+            caption=job.caption,
+            reply_markup=job.reply_markup,
+        ):
             return -1
 
         status = await app.bot.send_message(

@@ -24,7 +24,12 @@ from config import (
     WATCH_BLOCK_PROMO_COOLDOWN,
     WATCH_BLOCK_URL,
 )
-from core.video_download_queue import VideoDownloadJob, delete_delivered_video_messages, enqueue_video_download
+from core.video_download_queue import (
+    VideoDownloadJob,
+    delete_delivered_video_messages,
+    edit_archived_video_message,
+    enqueue_video_download,
+)
 from handlers.offline_paywall import answer_subscription_check, send_offline_paywall
 from handlers.discover import callback_launches, callback_random
 from handlers.search import _build_results_keyboard, _build_search_text, get_search_session
@@ -945,14 +950,17 @@ def _player_keyboard(
     episode_idx: int | None = None,
     total_episodes: int = 0,
     watch_label: str = "▶️ Assistir",
+    show_download: bool = True,
 ) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
 
     if episode_idx is not None:
-        rows.append([InlineKeyboardButton("📥 Baixar episódio", callback_data=f"pb_dl_ep|{session_token}|{season}|{episode_idx}")])
+        if show_download:
+            rows.append([InlineKeyboardButton("📥 Baixar episódio", callback_data=f"pb_dl_ep|{session_token}|{season}|{episode_idx}")])
         rows.append([InlineKeyboardButton("✅ Marcar como visto", callback_data=f"pb_seen_ep|{session_token}|{season}|{episode_idx}")])
     else:
-        rows.append([InlineKeyboardButton("📥 Baixar filme", callback_data=f"pb_dl_movie|{session_token}")])
+        if show_download:
+            rows.append([InlineKeyboardButton("📥 Baixar filme", callback_data=f"pb_dl_movie|{session_token}")])
         rows.append([InlineKeyboardButton("✅ Marcar como visto", callback_data=f"pb_seen_movie|{session_token}")])
 
     if episode_idx is not None and total_episodes > 0:
@@ -1248,6 +1256,35 @@ async def _show_movie_player_panel(
         player_url=player_url,
         downloads=player_links.get("downloads"),
     )
+    download_candidates = _download_candidates(player_links)
+    archive_url = download_candidates[0]["url"] if download_candidates else ""
+    if archive_url and _is_direct_stream_url(archive_url):
+        server_label = _best_download_server(player_links, archive_url)
+        no_download_keyboard = _player_keyboard(
+            session_token,
+            session,
+            player_url=player_url,
+            downloads=player_links.get("downloads"),
+            show_download=False,
+        )
+        caption = (
+            f"🎬 <b>{html.escape(str(session.get('title') or 'Filme'))}</b>\n"
+            "🎞️ <b>Tipo:</b> Filme\n"
+            f"🎙️ <b>Idioma:</b> {html.escape(_audio_text_label(selected_audio))}"
+        )
+        if await edit_archived_video_message(
+            context.application,
+            user_id=user.id if user else 0,
+            chat_id=query.message.chat_id,
+            message_id=getattr(query.message, "message_id", None),
+            content_id=_movie_delivery_cache_key(session),
+            item_label=_audio_text_label(selected_audio),
+            quality=server_label,
+            caption=caption,
+            reply_markup=no_download_keyboard,
+        ):
+            await _safe_answer(query)
+            return
     if not await _edit_existing_panel(query.message, text, keyboard, image=str(session.get("image") or "")):
         await _reply_panel(query.message, text, keyboard, image=str(session.get("image") or ""))
     await _safe_answer(query)
@@ -1675,6 +1712,7 @@ async def _handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             session,
             player_url=player_url,
             downloads=player_links.get("downloads"),
+            show_download=False,
         )
         try:
             result = await enqueue_video_download(
@@ -1793,6 +1831,7 @@ async def _handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             episode_idx=episode_idx,
             total_episodes=len(episodes),
             watch_label=_episode_watch_button_label(episode, episode_idx),
+            show_download=False,
         )
         try:
             result = await enqueue_video_download(
@@ -1900,6 +1939,42 @@ async def _handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         )
 
         text = _player_text(title, season, episode, episode_idx, len(episodes))
+        download_candidates = _download_candidates(player_links)
+        archive_url = download_candidates[0]["url"] if download_candidates else ""
+        if archive_url and _is_direct_stream_url(archive_url):
+            episode_number = _episode_number_value(episode, episode_idx)
+            server_label = _best_download_server(player_links, archive_url)
+            archived_keyboard = _player_keyboard(
+                session_token,
+                session,
+                player_url=player_url,
+                downloads=player_links.get("downloads"),
+                season=season,
+                page=max(1, (episode_idx // EPISODES_PER_PAGE) + 1),
+                episode_idx=episode_idx,
+                total_episodes=len(episodes),
+                watch_label=_episode_watch_button_label(episode, episode_idx),
+                show_download=False,
+            )
+            archived_caption = (
+                f"📺 <b>{html.escape(title or 'Série')}</b>\n"
+                f"🎞️ <b>Episódio:</b> {html.escape(label)}\n"
+                f"📚 <b>Temporada:</b> {season}\n"
+                f"🎙️ <b>Idioma:</b> {html.escape(_audio_text_label(selected_audio))}"
+            )
+            if await edit_archived_video_message(
+                context.application,
+                user_id=user.id if user else 0,
+                chat_id=query.message.chat_id,
+                message_id=getattr(query.message, "message_id", None),
+                content_id=_episode_delivery_cache_key(session, season, episode, episode_idx),
+                item_label=f"T{season:02d}E{episode_number:02d}",
+                quality=server_label,
+                caption=archived_caption,
+                reply_markup=archived_keyboard,
+            ):
+                await _safe_answer(query)
+                return
         keyboard = _player_keyboard(
             session_token,
             session,
