@@ -29,6 +29,7 @@ from core.video_download_queue import (
     delete_delivered_video_messages,
     edit_archived_video_message,
     enqueue_video_download,
+    has_archived_video,
 )
 from handlers.offline_paywall import answer_subscription_check, send_offline_paywall
 from handlers.discover import callback_launches, callback_random
@@ -273,7 +274,7 @@ async def _fetch_unique_player_links(
         for attempt in range(4):
             fetched = await asyncio.wait_for(
                 get_player_links(str(content_url or ""), preferred_audio=preferred_audio),
-                timeout=18,
+                timeout=35,
             )
             player_links = fetched if isinstance(fetched, dict) else {}
             player_url = str(player_links.get("player_url") or "").strip()
@@ -939,6 +940,31 @@ def _best_download_server(player_links: dict | None, selected_url: str) -> str:
     return "Player"
 
 
+def _movie_archive_caption(title: str, audio_label: str) -> str:
+    return (
+        f"🎬 <b>{html.escape(title or 'Filme')}</b>\n\n"
+        "<blockquote>"
+        "🎞️ <b>Tipo:</b> Filme\n"
+        f"🎙️ <b>Idioma:</b> {html.escape(audio_label)}\n"
+        "🕒 <b>Disponível por:</b> 24h"
+        "</blockquote>\n\n"
+        "<i>Marque como visto para apagar antes.</i>"
+    )
+
+
+def _episode_archive_caption(title: str, label: str, season: int, audio_label: str) -> str:
+    return (
+        f"📺 <b>{html.escape(title or 'Série')}</b>\n\n"
+        "<blockquote>"
+        f"🎞️ <b>Episódio:</b> {html.escape(label)}\n"
+        f"📚 <b>Temporada:</b> {season}\n"
+        f"🎙️ <b>Idioma:</b> {html.escape(audio_label)}\n"
+        "🕒 <b>Disponível por:</b> 24h"
+        "</blockquote>\n\n"
+        "<i>Use os botões abaixo para navegar ou marcar como visto.</i>"
+    )
+
+
 def _player_keyboard(
     session_token: str,
     session: dict,
@@ -1227,7 +1253,7 @@ async def _show_movie_player_panel(
                 session_token,
                 owner_key=_owner_request_key(user, session_token),
             ),
-            timeout=18,
+            timeout=40,
         )
     except Exception as exc:
         print("ERRO MOVIE PLAYER:", repr(exc))
@@ -1250,16 +1276,20 @@ async def _show_movie_player_panel(
 
     selected_audio = str(session.get("selected_audio") or session.get("default_audio") or "").strip().lower()
     text = _movie_player_text(str(session.get("title") or "Filme"), selected_audio)
+    download_candidates = _download_candidates(player_links)
+    archive_url = download_candidates[0]["url"] if download_candidates else ""
+    server_label = _best_download_server(player_links, archive_url) if archive_url else "Player"
+    item_label = _audio_text_label(selected_audio)
+    content_id = _movie_delivery_cache_key(session)
+    archived = bool(archive_url and has_archived_video(content_id, item_label, server_label))
     keyboard = _player_keyboard(
         session_token,
         session,
         player_url=player_url,
         downloads=player_links.get("downloads"),
+        show_download=not archived,
     )
-    download_candidates = _download_candidates(player_links)
-    archive_url = download_candidates[0]["url"] if download_candidates else ""
-    if archive_url and _is_direct_stream_url(archive_url):
-        server_label = _best_download_server(player_links, archive_url)
+    if archived:
         no_download_keyboard = _player_keyboard(
             session_token,
             session,
@@ -1267,20 +1297,17 @@ async def _show_movie_player_panel(
             downloads=player_links.get("downloads"),
             show_download=False,
         )
-        caption = (
-            f"🎬 <b>{html.escape(str(session.get('title') or 'Filme'))}</b>\n"
-            "🎞️ <b>Tipo:</b> Filme\n"
-            f"🎙️ <b>Idioma:</b> {html.escape(_audio_text_label(selected_audio))}"
-        )
+        caption = _movie_archive_caption(str(session.get("title") or "Filme"), item_label)
         if await edit_archived_video_message(
             context.application,
             user_id=user.id if user else 0,
             chat_id=query.message.chat_id,
             message_id=getattr(query.message, "message_id", None),
-            content_id=_movie_delivery_cache_key(session),
-            item_label=_audio_text_label(selected_audio),
+            content_id=content_id,
+            item_label=item_label,
             quality=server_label,
             caption=caption,
+            media_url=archive_url,
             reply_markup=no_download_keyboard,
         ):
             await _safe_answer(query)
@@ -1679,7 +1706,7 @@ async def _handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             return
 
         try:
-            player_links = await asyncio.wait_for(_load_movie_player(context, session_token), timeout=18)
+            player_links = await asyncio.wait_for(_load_movie_player(context, session_token), timeout=40)
         except Exception as exc:
             print("ERRO MOVIE DOWNLOAD:", repr(exc))
             await _restore_reply_markup(getattr(query, "message", None), original_markup)
@@ -1702,11 +1729,7 @@ async def _handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             username=((user.username or user.first_name or "") if user else ""),
             query_text=title,
         )
-        caption = (
-            f"🎬 <b>{html.escape(title)}</b>\n"
-            "🎞️ <b>Tipo:</b> Filme\n"
-            f"🎙️ <b>Idioma:</b> {html.escape(_audio_text_label(selected_audio))}"
-        )
+        caption = _movie_archive_caption(title, _audio_text_label(selected_audio))
         player_keyboard = _player_keyboard(
             session_token,
             session,
@@ -1815,12 +1838,7 @@ async def _handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             username=((user.username or user.first_name or "") if user else ""),
             query_text=f"{title} - {label}",
         )
-        caption = (
-            f"📺 <b>{html.escape(title)}</b>\n"
-            f"🎞️ <b>Episódio:</b> {html.escape(label)}\n"
-            f"📚 <b>Temporada:</b> {season}\n"
-            f"🎙️ <b>Idioma:</b> {html.escape(_audio_text_label(selected_audio))}"
-        )
+        caption = _episode_archive_caption(title, label, season, _audio_text_label(selected_audio))
         player_keyboard = _player_keyboard(
             session_token,
             session,
@@ -1941,9 +1959,12 @@ async def _handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         text = _player_text(title, season, episode, episode_idx, len(episodes))
         download_candidates = _download_candidates(player_links)
         archive_url = download_candidates[0]["url"] if download_candidates else ""
-        if archive_url and _is_direct_stream_url(archive_url):
-            episode_number = _episode_number_value(episode, episode_idx)
-            server_label = _best_download_server(player_links, archive_url)
+        episode_number = _episode_number_value(episode, episode_idx)
+        server_label = _best_download_server(player_links, archive_url) if archive_url else "Player"
+        content_id = _episode_delivery_cache_key(session, season, episode, episode_idx)
+        item_label = f"T{season:02d}E{episode_number:02d}"
+        archived = bool(archive_url and has_archived_video(content_id, item_label, server_label))
+        if archived:
             archived_keyboard = _player_keyboard(
                 session_token,
                 session,
@@ -1956,21 +1977,17 @@ async def _handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                 watch_label=_episode_watch_button_label(episode, episode_idx),
                 show_download=False,
             )
-            archived_caption = (
-                f"📺 <b>{html.escape(title or 'Série')}</b>\n"
-                f"🎞️ <b>Episódio:</b> {html.escape(label)}\n"
-                f"📚 <b>Temporada:</b> {season}\n"
-                f"🎙️ <b>Idioma:</b> {html.escape(_audio_text_label(selected_audio))}"
-            )
+            archived_caption = _episode_archive_caption(title, label, season, _audio_text_label(selected_audio))
             if await edit_archived_video_message(
                 context.application,
                 user_id=user.id if user else 0,
                 chat_id=query.message.chat_id,
                 message_id=getattr(query.message, "message_id", None),
-                content_id=_episode_delivery_cache_key(session, season, episode, episode_idx),
-                item_label=f"T{season:02d}E{episode_number:02d}",
+                content_id=content_id,
+                item_label=item_label,
                 quality=server_label,
                 caption=archived_caption,
+                media_url=archive_url,
                 reply_markup=archived_keyboard,
             ):
                 await _safe_answer(query)
@@ -1985,6 +2002,7 @@ async def _handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             episode_idx=episode_idx,
             total_episodes=len(episodes),
             watch_label=_episode_watch_button_label(episode, episode_idx),
+            show_download=not archived,
         )
 
         if not await _edit_existing_panel(query.message, text, keyboard, image=str(session.get("image") or "")):

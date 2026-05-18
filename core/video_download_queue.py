@@ -254,13 +254,14 @@ async def _copy_archived_video(bot, chat_id: int, entry: dict, caption: str):
 
 async def _edit_message_to_archived_video(bot, job: VideoDownloadJob, entry: dict):
     file_id = str(entry.get("file_id") or "").strip()
-    if not file_id or not job.target_message_id:
+    media = file_id or str(job.video_url or "").strip()
+    if not media or not job.target_message_id:
         return None
     try:
         return await bot.edit_message_media(
             chat_id=job.chat_id,
             message_id=int(job.target_message_id),
-            media=InputMediaVideo(media=file_id, caption=job.caption, parse_mode="HTML"),
+            media=InputMediaVideo(media=media, caption=job.caption, parse_mode="HTML"),
             reply_markup=job.reply_markup,
         )
     except Exception as error:
@@ -268,34 +269,29 @@ async def _edit_message_to_archived_video(bot, job: VideoDownloadJob, entry: dic
         return None
 
 
-async def _hydrate_archive_file_id(bot, chat_id: int, entry: dict) -> dict:
-    if str(entry.get("file_id") or "").strip():
-        return entry
-    message_id = entry.get("archive_message_id")
-    archive_chat_id = entry.get("archive_chat_id") or DOWNLOAD_ARCHIVE_CHANNEL
-    if not message_id or not archive_chat_id:
-        return entry
-    forwarded = None
+async def _edit_message_to_video_file(bot, job: VideoDownloadJob, path: Path):
+    if not job.target_message_id:
+        return None
     try:
-        forwarded = await bot.forward_message(
-            chat_id=chat_id,
-            from_chat_id=archive_chat_id,
-            message_id=int(message_id),
-        )
-        file_id = _video_file_id_from_sent(forwarded)
-        if file_id:
-            entry = dict(entry)
-            entry["file_id"] = file_id
+        with open(path, "rb") as file:
+            return await bot.edit_message_media(
+                chat_id=job.chat_id,
+                message_id=int(job.target_message_id),
+                media=InputMediaVideo(media=file, caption=job.caption, parse_mode="HTML"),
+                reply_markup=job.reply_markup,
+                read_timeout=120,
+                write_timeout=120,
+                connect_timeout=30,
+                pool_timeout=30,
+            )
     except Exception as error:
-        print(f"[VIDEO_ARCHIVE] hydrate_failed key_entry={entry!r} error={error!r}")
-    finally:
-        forwarded_id = _message_id_from_sent(forwarded)
-        if forwarded_id:
-            try:
-                await bot.delete_message(chat_id=chat_id, message_id=forwarded_id)
-            except Exception:
-                pass
-    return entry
+        print(f"[VIDEO_EDIT] upload_edit_failed error={error!r}")
+        return None
+
+
+def has_archived_video(content_id: str, item_label: str, quality: str) -> bool:
+    key = _job_key(content_id, item_label, quality)
+    return bool(_load_archive_index().get(key))
 
 
 async def edit_archived_video_message(
@@ -308,6 +304,7 @@ async def edit_archived_video_message(
     item_label: str,
     quality: str,
     caption: str,
+    media_url: str = "",
     reply_markup=None,
 ) -> bool:
     if not message_id:
@@ -318,11 +315,6 @@ async def edit_archived_video_message(
         archive_entry = index.get(key) or {}
         if not archive_entry:
             return False
-        if not str(archive_entry.get("file_id") or "").strip():
-            archive_entry = await _hydrate_archive_file_id(app.bot, chat_id, archive_entry)
-            if str(archive_entry.get("file_id") or "").strip():
-                index[key] = archive_entry
-                _save_archive_index(index)
     job = VideoDownloadJob(
         user_id=user_id,
         chat_id=chat_id,
@@ -330,7 +322,7 @@ async def edit_archived_video_message(
         item_label=item_label,
         quality=quality,
         title=str(archive_entry.get("title") or ""),
-        video_url="",
+        video_url=media_url,
         caption=caption,
         target_message_id=message_id,
         reply_markup=reply_markup,
@@ -978,6 +970,7 @@ async def _process_job(app, job: VideoDownloadJob) -> None:
 
             sent = None
             edited_existing_message = False
+            waiter_has_panel = bool(waiter.get("target_message_id"))
             if archive_entry:
                 waiter_job = replace(
                     job,
@@ -988,8 +981,20 @@ async def _process_job(app, job: VideoDownloadJob) -> None:
                 )
                 sent = await _edit_message_to_archived_video(app.bot, waiter_job, archive_entry)
                 edited_existing_message = bool(sent)
-                if not sent:
+                if not sent and not waiter_has_panel:
                     sent = await _copy_archived_video(app.bot, waiter["chat_id"], archive_entry, waiter["caption"])
+            if not sent:
+                waiter_job = replace(
+                    job,
+                    chat_id=waiter["chat_id"],
+                    caption=waiter["caption"],
+                    target_message_id=waiter.get("target_message_id"),
+                    reply_markup=waiter.get("reply_markup"),
+                )
+                sent = await _edit_message_to_video_file(app.bot, waiter_job, path)
+                edited_existing_message = bool(sent)
+            if not sent and waiter_has_panel:
+                raise RuntimeError("Nao consegui editar a mensagem original com o video baixado.")
             if not sent:
                 sent = await _send_video_safe(app.bot, waiter["chat_id"], path, waiter["caption"], progress_cb=progress_cb)
             _remember_delivered_video(
@@ -1012,15 +1017,17 @@ async def _process_job(app, job: VideoDownloadJob) -> None:
         )
 
         for message in list(entry["status_messages"]):
-            await _safe_edit(
-                message,
-                (
-                    "✅ <b>Vídeo enviado</b>\n\n"
-                    f"🎬 <b>Título:</b> {html.escape(job.title)}\n"
-                    f"🎞️ <b>Item:</b> {html.escape(str(job.item_label))}\n\n"
-                    "<i>Por segurança, o arquivo some em até 24h ou quando for marcado como visto.</i>"
-                ),
-            )
+            try:
+                await message.delete()
+            except Exception:
+                await _safe_edit(
+                    message,
+                    (
+                        "✅ <b>Vídeo pronto</b>\n\n"
+                        f"🎬 <b>Título:</b> {html.escape(job.title)}\n"
+                        f"🎞️ <b>Item:</b> {html.escape(str(job.item_label))}"
+                    ),
+                )
     except Exception as error:
         for message in list(entry["status_messages"]):
             await _safe_edit(message, f"❌ <b>Falha ao baixar vídeo</b>\n\n<code>{html.escape(str(error))}</code>")
@@ -1062,9 +1069,11 @@ async def enqueue_video_download(app, job: VideoDownloadJob) -> int:
             item_label=job.item_label,
             quality=job.quality,
             caption=job.caption,
+            media_url=job.video_url,
             reply_markup=job.reply_markup,
         ):
             return -1
+        raise RuntimeError("Nao consegui abrir o arquivo salvo nessa mensagem. Tente abrir o episodio novamente.")
 
         status = await app.bot.send_message(
             job.chat_id,

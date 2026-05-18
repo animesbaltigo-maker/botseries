@@ -67,7 +67,7 @@ PLAYER_SERVER_LABELS = {
     "streamtape": "StreamTape",
     "mixdrop": "MixDrop",
 }
-PLAYER_RESOLVE_TIMEOUT = 12.0
+PLAYER_RESOLVE_TIMEOUT = 30.0
 
 CACHE_TTL_SEARCH  = 60 * 10   # 10 min
 CACHE_TTL_DETAIL  = 60 * 30   # 30 min
