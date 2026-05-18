@@ -1761,7 +1761,6 @@ async def _handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         if result == -1:
             await _safe_answer(query, "âœ… Filme pronto no Telegram.")
             return
-        await _restore_reply_markup(getattr(query, "message", None), original_markup)
         await _safe_answer(query, "⏳ Preparando o filme no Telegram...")
         return
 
@@ -1875,7 +1874,6 @@ async def _handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         if result == -1:
             await _safe_answer(query, "Episodio pronto no Telegram.")
             return
-        await _restore_reply_markup(getattr(query, "message", None), original_markup)
         await _safe_answer(query, "⏳ Preparando o episódio no Telegram...")
         return
 

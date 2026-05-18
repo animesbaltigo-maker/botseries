@@ -1174,6 +1174,28 @@ async def enqueue_video_download(app, job: VideoDownloadJob) -> int:
         return queue.qsize()
 
 
+async def archive_video_if_missing(app, job: VideoDownloadJob) -> bool:
+    key = _job_key(job.content_id, job.item_label, job.quality)
+    if _load_archive_index().get(key):
+        return False
+    entry = {"status_messages": []}
+    path = None
+    try:
+        path = await _download_file(job, entry)
+        async with _archive_lock:
+            index = _load_archive_index()
+            if index.get(key):
+                return False
+            archive_entry = await _archive_downloaded_video(app, job, path)
+            if not archive_entry:
+                return False
+            index[key] = archive_entry
+            _save_archive_index(index)
+            return True
+    finally:
+        await _delete_downloaded_file(path)
+
+
 async def start_video_download_workers(app) -> None:
     global _cleanup_task, _delivery_cleanup_task
     if app.bot_data.get("video_download_workers_started"):

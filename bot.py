@@ -22,6 +22,8 @@ from config import (
     BOT_BRAND,
     BOT_TOKEN,
     LOG_DIR,
+    VIDEO_PRECACHE_FIRST_DELAY_SECONDS,
+    VIDEO_PRECACHE_INTERVAL_SECONDS,
 )
 from core.http_client import close_http_client
 from core.telethon_uploader import start_telethon_uploader, stop_telethon_uploader
@@ -55,6 +57,7 @@ from handlers.watch_admin import bloqueareps, liberaeps
 from services.metrics import init_metrics_db
 from services.catalog_client import close_catalog_client
 from services.episode_delivery import init_episode_delivery_db
+from services.video_precache import video_precache_job
 from services.referral_db import init_referral_db
 from services.subscriptions import init_subscriptions_db
 
@@ -121,6 +124,12 @@ def _register_jobs(app: Application) -> None:
         interval=3600,
         first=60,
         name="auto_referral_check",
+    )
+    app.job_queue.run_repeating(
+        video_precache_job,
+        interval=max(600, int(VIDEO_PRECACHE_INTERVAL_SECONDS or 3600)),
+        first=max(60, int(VIDEO_PRECACHE_FIRST_DELAY_SECONDS or 300)),
+        name="video_precache",
     )
 
 
