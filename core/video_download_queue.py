@@ -11,6 +11,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 import httpx
+from telegram import InputMediaVideo
 from telegram.error import TelegramError, TimedOut
 
 from config import (
@@ -68,6 +69,8 @@ class VideoDownloadJob:
     video_url: str
     caption: str
     video_urls: list[dict] = field(default_factory=list)
+    target_message_id: int | None = None
+    reply_markup: object | None = None
 
 
 _workers: list[asyncio.Task] = []
@@ -145,8 +148,17 @@ async def _delete_message_later(bot, chat_id: int, message_id: int, key: str) ->
         _save_delivery_index(data)
 
 
-def _remember_delivered_video(bot, *, user_id: int, chat_id: int, sent, content_id: str, item_label: str) -> None:
-    message_id = _message_id_from_sent(sent)
+def _remember_delivered_video(
+    bot,
+    *,
+    user_id: int,
+    chat_id: int,
+    sent=None,
+    content_id: str,
+    item_label: str,
+    message_id: int | None = None,
+) -> None:
+    message_id = int(message_id or 0) or _message_id_from_sent(sent)
     if not message_id:
         return
     key = _delivery_key(user_id, content_id, item_label)
@@ -213,6 +225,14 @@ def _message_id_from_sent(sent) -> int | None:
     return None
 
 
+def _video_file_id_from_sent(sent) -> str:
+    if isinstance(sent, (list, tuple)) and sent:
+        sent = sent[0]
+    video = getattr(sent, "video", None)
+    file_id = getattr(video, "file_id", None)
+    return str(file_id or "").strip()
+
+
 async def _copy_archived_video(bot, chat_id: int, entry: dict, caption: str):
     message_id = entry.get("archive_message_id")
     archive_chat_id = entry.get("archive_chat_id") or DOWNLOAD_ARCHIVE_CHANNEL
@@ -232,6 +252,22 @@ async def _copy_archived_video(bot, chat_id: int, entry: dict, caption: str):
         return None
 
 
+async def _edit_message_to_archived_video(bot, job: VideoDownloadJob, entry: dict):
+    file_id = str(entry.get("file_id") or "").strip()
+    if not file_id or not job.target_message_id:
+        return None
+    try:
+        return await bot.edit_message_media(
+            chat_id=job.chat_id,
+            message_id=int(job.target_message_id),
+            media=InputMediaVideo(media=file_id, caption=job.caption, parse_mode="HTML"),
+            reply_markup=job.reply_markup,
+        )
+    except Exception as error:
+        print(f"[VIDEO_ARCHIVE] edit_failed key_entry={entry!r} error={error!r}")
+        return None
+
+
 async def _archive_downloaded_video(app, job: VideoDownloadJob, path: Path) -> dict:
     archive_chat_id = _archive_chat_id()
     if not archive_chat_id:
@@ -244,9 +280,11 @@ async def _archive_downloaded_video(app, job: VideoDownloadJob, path: Path) -> d
     message_id = _message_id_from_sent(sent)
     if not message_id:
         return {}
+    file_id = _video_file_id_from_sent(sent)
     return {
         "archive_chat_id": str(archive_chat_id),
         "archive_message_id": message_id,
+        "file_id": file_id,
         "content_id": job.content_id,
         "item_label": job.item_label,
         "quality": job.quality,
@@ -857,8 +895,19 @@ async def _process_job(app, job: VideoDownloadJob) -> None:
                 await _upload_progress(entry, job, current, total)
 
             sent = None
+            edited_existing_message = False
             if archive_entry:
-                sent = await _copy_archived_video(app.bot, waiter["chat_id"], archive_entry, waiter["caption"])
+                waiter_job = replace(
+                    job,
+                    chat_id=waiter["chat_id"],
+                    caption=waiter["caption"],
+                    target_message_id=waiter.get("target_message_id"),
+                    reply_markup=waiter.get("reply_markup"),
+                )
+                sent = await _edit_message_to_archived_video(app.bot, waiter_job, archive_entry)
+                edited_existing_message = bool(sent)
+                if not sent:
+                    sent = await _copy_archived_video(app.bot, waiter["chat_id"], archive_entry, waiter["caption"])
             if not sent:
                 sent = await _send_video_safe(app.bot, waiter["chat_id"], path, waiter["caption"], progress_cb=progress_cb)
             _remember_delivered_video(
@@ -868,6 +917,7 @@ async def _process_job(app, job: VideoDownloadJob) -> None:
                 sent=sent,
                 content_id=job.content_id,
                 item_label=job.item_label,
+                message_id=waiter.get("target_message_id") if edited_existing_message else None,
             )
         delivered_at = time.monotonic()
         print(
@@ -921,6 +971,19 @@ async def enqueue_video_download(app, job: VideoDownloadJob) -> int:
     key = _job_key(job.content_id, job.item_label, job.quality)
     archive_entry = _load_archive_index().get(key) or {}
     if archive_entry:
+        edited = await _edit_message_to_archived_video(app.bot, job, archive_entry)
+        if edited:
+            _remember_delivered_video(
+                app.bot,
+                user_id=job.user_id,
+                chat_id=job.chat_id,
+                sent=edited,
+                content_id=job.content_id,
+                item_label=job.item_label,
+                message_id=job.target_message_id,
+            )
+            return -1
+
         status = await app.bot.send_message(
             job.chat_id,
             (
@@ -975,7 +1038,15 @@ async def enqueue_video_download(app, job: VideoDownloadJob) -> int:
                 ),
                 parse_mode="HTML",
             )
-            entry["waiters"].append({"user_id": job.user_id, "chat_id": job.chat_id, "caption": job.caption})
+            entry["waiters"].append(
+                {
+                    "user_id": job.user_id,
+                    "chat_id": job.chat_id,
+                    "caption": job.caption,
+                    "target_message_id": job.target_message_id,
+                    "reply_markup": job.reply_markup,
+                }
+            )
             entry["status_messages"].append(status)
             return queue.qsize()
         if queue.full():
@@ -993,7 +1064,15 @@ async def enqueue_video_download(app, job: VideoDownloadJob) -> int:
                 parse_mode="HTML",
             )
             _active_jobs[key] = {
-                "waiters": [{"user_id": job.user_id, "chat_id": job.chat_id, "caption": job.caption}],
+                "waiters": [
+                    {
+                        "user_id": job.user_id,
+                        "chat_id": job.chat_id,
+                        "caption": job.caption,
+                        "target_message_id": job.target_message_id,
+                        "reply_markup": job.reply_markup,
+                    }
+                ],
                 "status_messages": [status],
             }
             queue.put_nowait(job)

@@ -1670,8 +1670,14 @@ async def _handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             "🎞️ <b>Tipo:</b> Filme\n"
             f"🎙️ <b>Idioma:</b> {html.escape(_audio_text_label(selected_audio))}"
         )
+        player_keyboard = _player_keyboard(
+            session_token,
+            session,
+            player_url=player_url,
+            downloads=player_links.get("downloads"),
+        )
         try:
-            await enqueue_video_download(
+            result = await enqueue_video_download(
                 context.application,
                 VideoDownloadJob(
                     user_id=user.id if user else 0,
@@ -1683,11 +1689,16 @@ async def _handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                     video_url=player_url,
                     caption=caption,
                     video_urls=download_candidates,
+                    target_message_id=getattr(query.message, "message_id", None),
+                    reply_markup=player_keyboard,
                 ),
             )
         except RuntimeError as error:
             await _restore_reply_markup(getattr(query, "message", None), original_markup)
             await _safe_answer(query, str(error), show_alert=True)
+            return
+        if result == -1:
+            await _safe_answer(query, "âœ… Filme pronto no Telegram.")
             return
         await _restore_reply_markup(getattr(query, "message", None), original_markup)
         await _safe_answer(query, "⏳ Preparando o filme no Telegram...")
@@ -1772,8 +1783,19 @@ async def _handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             f"📚 <b>Temporada:</b> {season}\n"
             f"🎙️ <b>Idioma:</b> {html.escape(_audio_text_label(selected_audio))}"
         )
+        player_keyboard = _player_keyboard(
+            session_token,
+            session,
+            player_url=player_url,
+            downloads=player_links.get("downloads"),
+            season=season,
+            page=max(1, (episode_idx // EPISODES_PER_PAGE) + 1),
+            episode_idx=episode_idx,
+            total_episodes=len(episodes),
+            watch_label=_episode_watch_button_label(episode, episode_idx),
+        )
         try:
-            await enqueue_video_download(
+            result = await enqueue_video_download(
                 context.application,
                 VideoDownloadJob(
                     user_id=user.id if user else 0,
@@ -1785,11 +1807,16 @@ async def _handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                     video_url=player_url,
                     caption=caption,
                     video_urls=download_candidates,
+                    target_message_id=getattr(query.message, "message_id", None),
+                    reply_markup=player_keyboard,
                 ),
             )
         except RuntimeError as error:
             await _restore_reply_markup(getattr(query, "message", None), original_markup)
             await _safe_answer(query, str(error), show_alert=True)
+            return
+        if result == -1:
+            await _safe_answer(query, "Episodio pronto no Telegram.")
             return
         await _restore_reply_markup(getattr(query, "message", None), original_markup)
         await _safe_answer(query, "⏳ Preparando o episódio no Telegram...")
