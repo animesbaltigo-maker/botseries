@@ -223,7 +223,11 @@ async def buscar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
 
-    if not context.args:
+    query = _normalize_query(" ".join(context.args or []))
+    if not query and context.user_data.pop("_plain_search_message", False):
+        query = _normalize_query(message.text or "")
+
+    if not query:
         await message.reply_text(
             "🔎 <b>Como buscar</b>\n\n"
             "Envie:\n"
@@ -236,7 +240,6 @@ async def buscar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
 
-    query = _normalize_query(" ".join(context.args))
     if not query or len(query) < 2:
         await message.reply_text("⚠️ <b>Digite pelo menos 2 caracteres.</b>", parse_mode="HTML")
         return
@@ -321,3 +324,18 @@ async def buscar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             )
         finally:
             _clear_inflight(user.id, query)
+
+
+async def buscar_texto_livre(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    message = update.effective_message
+    chat = update.effective_chat
+    user = update.effective_user
+    if not message or not chat or not user or chat.type != "private":
+        return
+    if context.user_data.get("broadcast_state"):
+        return
+    text = _normalize_query(message.text or "")
+    if not text or text.startswith("/"):
+        return
+    context.user_data["_plain_search_message"] = True
+    await buscar(update, context)

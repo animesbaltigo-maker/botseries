@@ -49,7 +49,7 @@ from handlers.postanime import postanime
 from handlers.postfilmes import postfilmes
 from handlers.referral import indicacoes, referral_button
 from handlers.referral_admin import auto_referral_check_job, refstats
-from handlers.search import buscar
+from handlers.search import buscar, buscar_texto_livre
 from handlers.start import start
 from handlers.watch_admin import bloqueareps, liberaeps
 from services.metrics import init_metrics_db
@@ -182,6 +182,10 @@ def main() -> None:
     app.add_handler(CallbackQueryHandler(referral_button, pattern=r"^noop_indicar$"))
     app.add_handler(CallbackQueryHandler(callbacks, pattern=r"^(pb_|subcheck$|noop$)"))
 
+    app.add_handler(
+        MessageHandler(filters.TEXT & filters.ChatType.PRIVATE & ~filters.COMMAND, buscar_texto_livre),
+        group=10,
+    )
     app.add_handler(
         MessageHandler(filters.ALL & ~filters.COMMAND, broadcast_message_router),
         group=99,
