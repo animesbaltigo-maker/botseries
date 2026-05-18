@@ -24,12 +24,12 @@ from config import (
     WATCH_BLOCK_PROMO_COOLDOWN,
     WATCH_BLOCK_URL,
 )
-from core.video_download_queue import VideoDownloadJob, enqueue_video_download
+from core.video_download_queue import VideoDownloadJob, delete_delivered_video_messages, enqueue_video_download
 from handlers.offline_paywall import answer_subscription_check, send_offline_paywall
 from handlers.discover import callback_launches, callback_random
 from handlers.search import _build_results_keyboard, _build_search_text, get_search_session
 from services.cakto_gateway import get_checkout_options
-from services.metrics import log_event, mark_user_seen
+from services.metrics import log_event, mark_episode_watched, mark_user_seen
 from services.referral_db import create_referral, referral_distinct_clicks
 from services.watch_guard import is_watch_block_active_for_user
 from services.subscriptions import is_active_subscriber
@@ -949,8 +949,10 @@ def _player_keyboard(
 
     if episode_idx is not None:
         rows.append([InlineKeyboardButton("📥 Baixar no Telegram", callback_data=f"pb_dl_ep|{session_token}|{season}|{episode_idx}")])
+        rows.append([InlineKeyboardButton("? Marcar como visto", callback_data=f"pb_seen_ep|{session_token}|{season}|{episode_idx}")])
     else:
         rows.append([InlineKeyboardButton("📥 Baixar no Telegram", callback_data=f"pb_dl_movie|{session_token}")])
+        rows.append([InlineKeyboardButton("? Marcar como visto", callback_data=f"pb_seen_movie|{session_token}")])
 
     if episode_idx is not None and total_episodes > 0:
         nav: list[InlineKeyboardButton] = []
@@ -1552,6 +1554,52 @@ async def _handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         season = int(parts[2]) if parts[2].isdigit() else 1
         page = int(parts[3]) if parts[3].isdigit() else 1
         await _show_season_picker_panel(query, context, session_token, season, page, restore_markup=original_markup)
+        return
+
+    if data.startswith("pb_seen_movie|"):
+        parts = data.split("|")
+        if len(parts) < 2:
+            await _safe_answer(query)
+            return
+        session_token = parts[1]
+        session = _get_content_session(context, session_token)
+        if not session:
+            await _safe_answer(query, "SessÃ£o expirada. FaÃ§a uma nova busca.", show_alert=True)
+            return
+        selected_audio = str(session.get("selected_audio") or session.get("default_audio") or "").strip().lower()
+        content_id = _movie_delivery_cache_key(session)
+        item_label = _audio_text_label(selected_audio)
+        mark_episode_watched(user.id if user else 0, f"{content_id}|{item_label}")
+        await delete_delivered_video_messages(context.application.bot, user.id if user else 0, content_id, item_label)
+        await _safe_answer(query, "Marcado como visto. O arquivo enviado foi apagado.", show_alert=False)
+        return
+
+    if data.startswith("pb_seen_ep|"):
+        parts = data.split("|")
+        if len(parts) < 4:
+            await _safe_answer(query)
+            return
+        session_token = parts[1]
+        season = int(parts[2]) if parts[2].isdigit() else 1
+        episode_idx = int(parts[3]) if parts[3].isdigit() else 0
+        session = _get_content_session(context, session_token)
+        if not session:
+            await _safe_answer(query, "SessÃ£o expirada. FaÃ§a uma nova busca.", show_alert=True)
+            return
+        try:
+            _, episodes = await _load_series_payload(context, session_token, season)
+        except Exception:
+            episodes = []
+        if not episodes or episode_idx < 0 or episode_idx >= len(episodes):
+            await _safe_answer(query, "EpisÃ³dio invÃ¡lido.", show_alert=True)
+            return
+        episode = episodes[episode_idx]
+        episode_number = _episode_number_value(episode, episode_idx)
+        content_id = _episode_delivery_cache_key(session, season, episode, episode_idx)
+        item_label = f"T{season:02d}E{episode_number:02d}"
+        mark_episode_watched(user.id if user else 0, f"{content_id}|{item_label}")
+        await delete_delivered_video_messages(context.application.bot, user.id if user else 0, content_id, item_label)
+        await _safe_answer(query, "Marcado como visto. O arquivo enviado foi apagado.", show_alert=False)
         return
 
     if data.startswith("pb_watch|"):
