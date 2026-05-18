@@ -71,6 +71,7 @@ class VideoDownloadJob:
     video_urls: list[dict] = field(default_factory=list)
     target_message_id: int | None = None
     reply_markup: object | None = None
+    ttl_seconds: int = 24 * 60 * 60
 
 
 _workers: list[asyncio.Task] = []
@@ -84,6 +85,7 @@ _archive_lock = asyncio.Lock()
 ARCHIVE_INDEX_PATH = Path(VIDEO_DOWNLOAD_CACHE_DIR).parent / "series_file_ids.json"
 DELIVERY_INDEX_PATH = Path(VIDEO_DOWNLOAD_CACHE_DIR).parent / "series_delivery_messages.json"
 DELIVERY_TTL_SECONDS = 24 * 60 * 60
+REFERRAL_DELIVERY_TTL_SECONDS = 6 * 60 * 60
 
 
 def _job_key(content_id: str, item_label: str, quality: str) -> str:
@@ -135,8 +137,8 @@ def _save_delivery_index(data: dict) -> None:
     tmp.replace(DELIVERY_INDEX_PATH)
 
 
-async def _delete_message_later(bot, chat_id: int, message_id: int, key: str) -> None:
-    await asyncio.sleep(DELIVERY_TTL_SECONDS)
+async def _delete_message_later(bot, chat_id: int, message_id: int, key: str, ttl_seconds: int) -> None:
+    await asyncio.sleep(max(60, int(ttl_seconds or DELIVERY_TTL_SECONDS)))
     try:
         await bot.delete_message(chat_id=chat_id, message_id=message_id)
     except Exception as error:
@@ -157,10 +159,12 @@ def _remember_delivered_video(
     content_id: str,
     item_label: str,
     message_id: int | None = None,
+    ttl_seconds: int = DELIVERY_TTL_SECONDS,
 ) -> None:
     message_id = int(message_id or 0) or _message_id_from_sent(sent)
     if not message_id:
         return
+    ttl = max(60, int(ttl_seconds or DELIVERY_TTL_SECONDS))
     key = _delivery_key(user_id, content_id, item_label)
     data = _load_delivery_index()
     data[key] = {
@@ -170,10 +174,11 @@ def _remember_delivered_video(
         "content_id": str(content_id),
         "item_label": str(item_label),
         "created_at": int(time.time()),
-        "expires_at": int(time.time()) + DELIVERY_TTL_SECONDS,
+        "expires_at": int(time.time()) + ttl,
+        "ttl_seconds": ttl,
     }
     _save_delivery_index(data)
-    asyncio.create_task(_delete_message_later(bot, int(chat_id), int(message_id), key))
+    asyncio.create_task(_delete_message_later(bot, int(chat_id), int(message_id), key, ttl))
 
 
 async def delete_delivered_video_messages(bot, user_id: int, content_id: str, item_label: str) -> int:
@@ -316,6 +321,7 @@ async def edit_archived_video_message(
     caption: str,
     media_url: str = "",
     reply_markup=None,
+    ttl_seconds: int = DELIVERY_TTL_SECONDS,
 ) -> bool:
     if not message_id:
         return False
@@ -347,6 +353,7 @@ async def edit_archived_video_message(
             content_id=content_id,
             item_label=item_label,
             message_id=message_id,
+            ttl_seconds=ttl_seconds,
         )
         return True
     copied = await _copy_archived_video(app.bot, chat_id, archive_entry, caption, reply_markup=reply_markup)
@@ -360,6 +367,7 @@ async def edit_archived_video_message(
         sent=copied,
         content_id=content_id,
         item_label=item_label,
+        ttl_seconds=ttl_seconds,
     )
     return True
 
@@ -419,6 +427,17 @@ def _human_size(value: int | None) -> str:
     if mb < 1024:
         return f"{mb:.1f} MB"
     return f"{mb / 1024:.2f} GB"
+
+
+def delivery_ttl_label(ttl_seconds: int | None) -> str:
+    ttl = max(60, int(ttl_seconds or DELIVERY_TTL_SECONDS))
+    hours = max(1, round(ttl / 3600))
+    if hours <= 48:
+        return f"{hours}h"
+    if hours % 24 == 0:
+        days = hours // 24
+        return f"{days} dia" if days == 1 else f"{days} dias"
+    return f"{hours}h"
 
 
 def _parse_aria2_size(value: str) -> int | None:
@@ -1035,6 +1054,7 @@ async def _process_job(app, job: VideoDownloadJob) -> None:
                 content_id=job.content_id,
                 item_label=job.item_label,
                 message_id=waiter.get("target_message_id") if edited_existing_message else None,
+                ttl_seconds=waiter.get("ttl_seconds", DELIVERY_TTL_SECONDS),
             )
         delivered_at = time.monotonic()
         print(
@@ -1101,6 +1121,7 @@ async def enqueue_video_download(app, job: VideoDownloadJob) -> int:
             caption=job.caption,
             media_url=job.video_url,
             reply_markup=job.reply_markup,
+            ttl_seconds=job.ttl_seconds,
         ):
             return -1
 
@@ -1130,6 +1151,7 @@ async def enqueue_video_download(app, job: VideoDownloadJob) -> int:
                 sent=sent,
                 content_id=job.content_id,
                 item_label=job.item_label,
+                ttl_seconds=job.ttl_seconds,
             )
             await _safe_edit(
                 status,
@@ -1137,7 +1159,7 @@ async def enqueue_video_download(app, job: VideoDownloadJob) -> int:
                     "✅ <b>Vídeo enviado</b>\n\n"
                     f"🎬 <b>Título:</b> {html.escape(job.title)}\n"
                     f"🎞️ <b>Item:</b> {html.escape(str(job.item_label))}\n\n"
-                    "<i>Por segurança, o arquivo some em até 24h ou quando for marcado como visto.</i>"
+                    f"<i>Por segurança, o arquivo some em até {delivery_ttl_label(job.ttl_seconds)} ou quando for marcado como visto.</i>"
                 ),
             )
             return queue.qsize()
@@ -1165,6 +1187,7 @@ async def enqueue_video_download(app, job: VideoDownloadJob) -> int:
                     "caption": job.caption,
                     "target_message_id": job.target_message_id,
                     "reply_markup": job.reply_markup,
+                    "ttl_seconds": job.ttl_seconds,
                 }
             )
             entry["status_messages"].append(status)
@@ -1191,6 +1214,7 @@ async def enqueue_video_download(app, job: VideoDownloadJob) -> int:
                         "caption": job.caption,
                         "target_message_id": job.target_message_id,
                         "reply_markup": job.reply_markup,
+                        "ttl_seconds": job.ttl_seconds,
                     }
                 ],
                 "status_messages": [status],

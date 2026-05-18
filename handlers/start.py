@@ -286,12 +286,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             if payload.startswith("ref_"):
                 ref_code = payload[4:]
                 register_referral_click(ref_code, user.id)
-                try_qualify_referral(user.id)
 
             if not await ensure_channel_membership(update, context):
                 return
 
             register_interaction(user.id)
+            if payload.startswith("ref_"):
+                try_qualify_referral(user.id, is_channel_member=True)
 
             if payload.startswith(INLINE_PAYLOAD_PREFIX) or payload.startswith(START_PAYLOAD_PREFIX):
                 handled = await _open_deeplink_payload_from_start(update, context, payload)

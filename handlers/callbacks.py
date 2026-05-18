@@ -28,6 +28,7 @@ from core.video_download_queue import (
     VideoDownloadJob,
     archive_video_if_missing,
     delete_delivered_video_messages,
+    delivery_ttl_label,
     edit_archived_video_message,
     enqueue_video_download,
     has_archived_video,
@@ -37,7 +38,7 @@ from handlers.discover import callback_launches, callback_random
 from handlers.search import _build_results_keyboard, _build_search_text, get_search_session
 from services.cakto_gateway import get_checkout_options
 from services.metrics import log_event, mark_episode_watched, mark_user_seen
-from services.referral_db import create_referral, referral_distinct_clicks
+from services.referral_db import create_referral, referral_qualified_count
 from services.watch_guard import is_watch_block_active_for_user
 from services.subscriptions import is_active_subscriber
 from services.catalog_client import (
@@ -149,8 +150,18 @@ def _has_subscription_access(user) -> bool:
 
 def _offline_referral_progress(user_id: int) -> tuple[bool, int, int]:
     required = max(1, int(OFFLINE_REFERRAL_REQUIRED_CLICKS or 3))
-    current = referral_distinct_clicks(user_id)
+    current = referral_qualified_count(user_id)
     return current >= required, current, required
+
+
+def _offline_delivery_ttl_seconds(user) -> int:
+    user_id = getattr(user, "id", 0) or 0
+    if _has_subscription_access(user):
+        return 24 * 60 * 60
+    unlocked, _, _ = _offline_referral_progress(user_id)
+    if unlocked:
+        return 6 * 60 * 60
+    return 24 * 60 * 60
 
 
 def _has_offline_download_access(user) -> bool:
@@ -386,6 +397,19 @@ async def _reply_panel(message, text: str, reply_markup, *, image: str = ""):
         reply_markup=reply_markup,
         disable_web_page_preview=not bool(image),
     )
+
+
+async def _replace_panel(message, text: str, reply_markup, *, image: str = ""):
+    is_video_message = bool(
+        getattr(message, "video", None)
+        or getattr(message, "document", None)
+        or getattr(message, "animation", None)
+    )
+    if not (image and is_video_message):
+        if await _edit_existing_panel(message, text, reply_markup, image=image):
+            return message
+    await _safe_delete(message)
+    return await _reply_panel(message, text, reply_markup, image=image)
 
 
 def _content_type_label(content_type: str) -> str:
@@ -943,7 +967,7 @@ def _best_download_server(player_links: dict | None, selected_url: str) -> str:
     return "Player"
 
 
-def _movie_archive_caption(title: str, audio_label: str, source_label: str = "") -> str:
+def _movie_archive_caption(title: str, audio_label: str, source_label: str = "", availability_label: str = "24h") -> str:
     source_line = f"\n🗂 <b>Fonte:</b> {html.escape(source_label)}" if source_label else ""
     return (
         f"🎬 <b>{html.escape(title or 'Filme')}</b>\n\n"
@@ -951,13 +975,20 @@ def _movie_archive_caption(title: str, audio_label: str, source_label: str = "")
         "🎞️ <b>Tipo:</b> Filme\n"
         f"🎙️ <b>Idioma:</b> {html.escape(audio_label)}"
         f"{source_line}\n"
-        "🕒 <b>Disponível por:</b> 24h"
+        f"🕒 <b>Disponível por:</b> {html.escape(availability_label)}"
         "</blockquote>\n\n"
         "<i>Marque como visto para apagar antes.</i>"
     )
 
 
-def _episode_archive_caption(title: str, label: str, season: int, audio_label: str, source_label: str = "") -> str:
+def _episode_archive_caption(
+    title: str,
+    label: str,
+    season: int,
+    audio_label: str,
+    source_label: str = "",
+    availability_label: str = "24h",
+) -> str:
     source_line = f"\n🗂 <b>Fonte:</b> {html.escape(source_label)}" if source_label else ""
     return (
         f"📺 <b>{html.escape(title or 'Série')}</b>\n\n"
@@ -966,7 +997,7 @@ def _episode_archive_caption(title: str, label: str, season: int, audio_label: s
         f"📚 <b>Temporada:</b> {season}\n"
         f"🎙️ <b>Idioma:</b> {html.escape(audio_label)}"
         f"{source_line}\n"
-        "🕒 <b>Disponível por:</b> 24h"
+        f"🕒 <b>Disponível por:</b> {html.escape(availability_label)}"
         "</blockquote>\n\n"
         "<i>Use os botões abaixo para navegar ou marcar como visto.</i>"
     )
@@ -982,7 +1013,7 @@ async def _precache_adjacent_episodes(
     selected_audio: str,
 ) -> None:
     title = str(session.get("title") or "Série").strip() or "Série"
-    indexes = [episode_idx - 1, episode_idx + 1]
+    indexes = [episode_idx + 1, episode_idx - 1]
     try:
         for neighbor_idx in indexes:
             if neighbor_idx < 0 or neighbor_idx >= len(episodes):
@@ -1040,6 +1071,9 @@ def _schedule_adjacent_episode_precache(
     season: int,
     episode_idx: int,
     selected_audio: str,
+    current_content_id: str = "",
+    current_item_label: str = "",
+    current_quality: str = "",
 ) -> None:
     key = f"{session_token}:{selected_audio}:{season}:{episode_idx}"
     if key in _ADJACENT_PRECACHE_KEYS:
@@ -1048,6 +1082,14 @@ def _schedule_adjacent_episode_precache(
 
     async def runner() -> None:
         try:
+            if current_content_id and current_item_label and current_quality:
+                deadline = time.monotonic() + (2 * 60 * 60)
+                while time.monotonic() < deadline:
+                    if has_archived_video(current_content_id, current_item_label, current_quality):
+                        break
+                    await asyncio.sleep(20)
+                if not has_archived_video(current_content_id, current_item_label, current_quality):
+                    return
             await _precache_adjacent_episodes(
                 context.application,
                 session=dict(session),
@@ -1292,8 +1334,7 @@ async def _show_episodes_panel(
         max(1, len(seasons)),
     )
 
-    if not await _edit_existing_panel(query.message, text, keyboard, image=str(session.get("image") or "")):
-        await _reply_panel(query.message, text, keyboard, image=str(session.get("image") or ""))
+    await _replace_panel(query.message, text, keyboard, image=str(session.get("image") or ""))
     await _safe_answer(query)
 
 
@@ -1324,8 +1365,7 @@ async def _show_season_picker_panel(
     text = _season_picker_text(str(session.get("title") or ""), season, len(episodes), selected_audio)
     keyboard = _season_picker_keyboard(session_token, seasons or [season], season, page)
 
-    if not await _edit_existing_panel(query.message, text, keyboard, image=str(session.get("image") or "")):
-        await _reply_panel(query.message, text, keyboard, image=str(session.get("image") or ""))
+    await _replace_panel(query.message, text, keyboard, image=str(session.get("image") or ""))
     await _safe_answer(query)
 
 
@@ -1394,7 +1434,13 @@ async def _show_movie_player_panel(
             downloads=player_links.get("downloads"),
             show_download=False,
         )
-        caption = _movie_archive_caption(str(session.get("title") or "Filme"), item_label, server_label)
+        ttl_seconds = _offline_delivery_ttl_seconds(user)
+        caption = _movie_archive_caption(
+            str(session.get("title") or "Filme"),
+            item_label,
+            server_label,
+            delivery_ttl_label(ttl_seconds),
+        )
         if await edit_archived_video_message(
             context.application,
             user_id=user.id if user else 0,
@@ -1406,11 +1452,11 @@ async def _show_movie_player_panel(
             caption=caption,
             media_url=archive_url,
             reply_markup=no_download_keyboard,
+            ttl_seconds=ttl_seconds,
         ):
             await _safe_answer(query)
             return
-    if not await _edit_existing_panel(query.message, text, keyboard, image=str(session.get("image") or "")):
-        await _reply_panel(query.message, text, keyboard, image=str(session.get("image") or ""))
+    await _replace_panel(query.message, text, keyboard, image=str(session.get("image") or ""))
     await _safe_answer(query)
 
 
@@ -1431,8 +1477,7 @@ async def _show_search_page(query, context: ContextTypes.DEFAULT_TYPE, token: st
     text = _build_search_text(str(session.get("query") or ""), page, len(results), heading=heading)
     keyboard = _build_results_keyboard(results, page, len(results), token)
 
-    if not await _edit_existing_panel(query.message, text, keyboard):
-        await _reply_panel(query.message, text, keyboard)
+    await _replace_panel(query.message, text, keyboard)
     await _safe_answer(query)
 
 
@@ -1457,8 +1502,7 @@ async def _show_detail_panel(
     if create_new:
         await _reply_panel(query.message, text, keyboard, image=image)
     else:
-        if not await _edit_existing_panel(query.message, text, keyboard, image=image):
-            await _reply_panel(query.message, text, keyboard, image=image)
+        await _replace_panel(query.message, text, keyboard, image=image)
 
     await _safe_answer(query)
 
@@ -1826,7 +1870,13 @@ async def _handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             username=((user.username or user.first_name or "") if user else ""),
             query_text=title,
         )
-        caption = _movie_archive_caption(title, _audio_text_label(selected_audio), server_label)
+        ttl_seconds = _offline_delivery_ttl_seconds(user)
+        caption = _movie_archive_caption(
+            title,
+            _audio_text_label(selected_audio),
+            server_label,
+            delivery_ttl_label(ttl_seconds),
+        )
         player_keyboard = _player_keyboard(
             session_token,
             session,
@@ -1849,6 +1899,7 @@ async def _handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                     video_urls=download_candidates,
                     target_message_id=getattr(query.message, "message_id", None),
                     reply_markup=player_keyboard,
+                    ttl_seconds=ttl_seconds,
                 ),
             )
         except RuntimeError as error:
@@ -1934,7 +1985,15 @@ async def _handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             username=((user.username or user.first_name or "") if user else ""),
             query_text=f"{title} - {label}",
         )
-        caption = _episode_archive_caption(title, label, season, _audio_text_label(selected_audio), server_label)
+        ttl_seconds = _offline_delivery_ttl_seconds(user)
+        caption = _episode_archive_caption(
+            title,
+            label,
+            season,
+            _audio_text_label(selected_audio),
+            server_label,
+            delivery_ttl_label(ttl_seconds),
+        )
         player_keyboard = _player_keyboard(
             session_token,
             session,
@@ -1962,6 +2021,7 @@ async def _handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                     video_urls=download_candidates,
                     target_message_id=getattr(query.message, "message_id", None),
                     reply_markup=player_keyboard,
+                    ttl_seconds=ttl_seconds,
                 ),
             )
         except RuntimeError as error:
@@ -1976,6 +2036,9 @@ async def _handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             season=season,
             episode_idx=episode_idx,
             selected_audio=selected_audio,
+            current_content_id=_episode_delivery_cache_key(session, season, episode, episode_idx),
+            current_item_label=f"T{season:02d}E{episode_number:02d}",
+            current_quality=server_label,
         )
         if result == -1:
             await _safe_answer(query, "Episodio pronto no Telegram.")
@@ -2081,7 +2144,15 @@ async def _handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                 watch_label=_episode_watch_button_label(episode, episode_idx),
                 show_download=False,
             )
-            archived_caption = _episode_archive_caption(title, label, season, _audio_text_label(selected_audio), server_label)
+            ttl_seconds = _offline_delivery_ttl_seconds(user)
+            archived_caption = _episode_archive_caption(
+                title,
+                label,
+                season,
+                _audio_text_label(selected_audio),
+                server_label,
+                delivery_ttl_label(ttl_seconds),
+            )
             if await edit_archived_video_message(
                 context.application,
                 user_id=user.id if user else 0,
@@ -2093,6 +2164,7 @@ async def _handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                 caption=archived_caption,
                 media_url=archive_url,
                 reply_markup=archived_keyboard,
+                ttl_seconds=ttl_seconds,
             ):
                 _schedule_adjacent_episode_precache(
                     context,
@@ -2118,8 +2190,7 @@ async def _handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             show_download=not archived,
         )
 
-        if not await _edit_existing_panel(query.message, text, keyboard, image=str(session.get("image") or "")):
-            await _reply_panel(query.message, text, keyboard, image=str(session.get("image") or ""))
+        await _replace_panel(query.message, text, keyboard, image=str(session.get("image") or ""))
         await _safe_answer(query)
         return
 
