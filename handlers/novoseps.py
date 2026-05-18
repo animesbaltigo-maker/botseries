@@ -160,11 +160,12 @@ def _build_caption(item: dict, detail: dict | None = None) -> str:
     footer = html.escape(CANAL_ATUALIZACOES_TAG or "@AtualizacoesOn")
 
     return (
+        f"🍿 <b>Novo episódio disponível</b>\n\n"
         f"🎬 <b>{title}</b>\n\n"
         "<blockquote>"
-        f"<b>Episódio:</b> {episode}\n"
-        f"<b>Status:</b> {status}\n"
-        f"<b>Áudio:</b> {audio}"
+        f"🎞️ <b>Episódio:</b> {episode}\n"
+        f"📡 <b>Status:</b> {status}\n"
+        f"🎙️ <b>Áudio:</b> {audio}"
         "</blockquote>\n\n"
         f"» {footer}"
     )
@@ -240,7 +241,7 @@ def _build_keyboard(
     deep_link = build_start_link(bot_username, token)
 
     return InlineKeyboardMarkup(
-        [[InlineKeyboardButton("🎬 Ver série", url=deep_link)]]
+        [[InlineKeyboardButton("▶️ Abrir no bot", url=deep_link)]]
     )
 
 
@@ -278,13 +279,22 @@ async def _post_item(context: ContextTypes.DEFAULT_TYPE, item: dict, destination
                 )
             except Exception as photo_error:
                 LOGGER.warning("Falha ao enviar foto do item %s: %r", item.get("url"), photo_error)
-                await context.bot.send_message(
-                    chat_id=destination,
-                    text=caption,
-                    parse_mode="HTML",
-                    reply_markup=keyboard,
-                    disable_web_page_preview=True,
-                )
+                try:
+                    await context.bot.send_photo(
+                        chat_id=destination,
+                        photo=image,
+                        caption=caption,
+                        parse_mode="HTML",
+                        reply_markup=keyboard,
+                    )
+                except Exception:
+                    await context.bot.send_message(
+                        chat_id=destination,
+                        text=caption,
+                        parse_mode="HTML",
+                        reply_markup=keyboard,
+                        disable_web_page_preview=True,
+                    )
         else:
             await context.bot.send_message(
                 chat_id=destination,

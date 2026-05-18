@@ -88,8 +88,11 @@ def _clear_inflight(user_id: int, payload: str) -> None:
 
 def _start_keyboard() -> InlineKeyboardMarkup:
     rows = [
-        [InlineKeyboardButton("🍿 Lançamentos", callback_data="pb_launches")],
-        [InlineKeyboardButton("🎲 Aleatório", callback_data="pb_random")],
+        [InlineKeyboardButton("🔎 Buscar filmes e séries", switch_inline_query_current_chat="")],
+        [
+            InlineKeyboardButton("🍿 Lançamentos", callback_data="pb_launches"),
+            InlineKeyboardButton("🎲 Aleatório", callback_data="pb_random"),
+        ],
         [InlineKeyboardButton("⚔️ Universo Baltigo", web_app=WebAppInfo(url=BALTIGO_UNIVERSE_WEBAPP_URL))],
     ]
     return InlineKeyboardMarkup(rows)
@@ -295,13 +298,17 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 if handled:
                     return
 
-            first_name = html.escape(user.first_name or "cinefilo")
+            first_name = html.escape(user.first_name or "cinéfilo")
             text = (
-                f"🍿 <b>Bem-vindo ao {html.escape(BOT_BRAND)}, {first_name}!</b>\n\n"
-                "Filmes e séries para encontrar, explorar e assistir com praticidade no Telegram.\n\n"
-                "<blockquote>• 🔎 Busque títulos pelo nome\n"
-                "• 🍿 Veja lançamentos\n"
-                "• ▶️ Abra o conteúdo em poucos toques</blockquote>\n\n"
+                f"🍿 <b>{html.escape(BOT_BRAND)}</b>\n\n"
+                f"Bem-vindo, <b>{first_name}</b>.\n"
+                "Seu catálogo de filmes e séries direto no Telegram.\n\n"
+                "<blockquote>"
+                "🔎 Busque por nome no próprio chat\n"
+                "📺 Navegue por temporadas e episódios\n"
+                "📥 Baixe no Telegram quando estiver disponível\n"
+                "🎁 Indique 3 pessoas para liberar o acesso offline"
+                "</blockquote>\n\n"
                 "<i>Escolha uma opção abaixo para começar.</i>"
             )
 

@@ -19,32 +19,27 @@ def _keyboard(user_id: int) -> InlineKeyboardMarkup:
         [InlineKeyboardButton(option["label"], url=option["url"])]
         for option in get_checkout_options(user_id)
     ]
-    rows.append([InlineKeyboardButton("Ja paguei / verificar", callback_data="subcheck")])
+    rows.append([InlineKeyboardButton("✅ Já paguei / verificar", callback_data="subcheck")])
     if BALTIGOFLIX_SUPPORT_URL:
-        rows.append([InlineKeyboardButton("Falar com suporte", url=BALTIGOFLIX_SUPPORT_URL)])
+        rows.append([InlineKeyboardButton("💬 Falar com suporte", url=BALTIGOFLIX_SUPPORT_URL)])
     return InlineKeyboardMarkup(rows)
 
 
 def _text(title: str = "") -> str:
     brand = html.escape(BOT_BRAND or "BaltigoFlix")
-    media_line = f"<b>Conteudo:</b> <i>{html.escape(title)}</i>\n" if title else ""
+    media_line = f"🎬 <b>Conteúdo:</b> <i>{html.escape(title)}</i>\n" if title else ""
 
     return (
-        "<b>Download bloqueado</b>\n\n"
-        f"<b>Area exclusiva para assinantes do {brand}</b>\n"
+        f"🔒 <b>Área exclusiva do {brand}</b>\n\n"
         f"{media_line}"
-        "<b>Status:</b> <code>sem assinatura ativa</code>\n"
-        "<b>Liberacao:</b> <i>automatica pelo seu Telegram ID</i>\n\n"
-        "<b>Com a assinatura voce libera:</b>\n"
-        "- Downloads de episodios e filmes direto no Telegram\n"
-        "- Acesso no bot de series e no bot de animes\n"
-        "- O mesmo plano e a mesma validade nos dois bots\n\n"
-        "<b>Planos:</b>\n"
-        "- Mensal: R$ 19,90\n"
-        "- Trimestral: R$ 39,90\n"
-        "- Semestral: R$ 59,90\n"
-        "- Anual: R$ 129,90\n\n"
-        "Escolha um plano abaixo. Depois do pagamento, toque em <b>Ja paguei / verificar</b>."
+        "📌 <b>Status:</b> <code>sem assinatura ativa</code>\n"
+        "⚡ <b>Liberação:</b> <i>automática pelo seu Telegram ID</i>\n\n"
+        "<blockquote>"
+        "📥 Downloads de filmes e episódios direto no Telegram\n"
+        "🎌 Acesso também no bot de animes\n"
+        "🔁 Mesmo plano, mesma validade"
+        "</blockquote>\n\n"
+        "Escolha um plano abaixo. Depois do pagamento, toque em <b>Já paguei / verificar</b>."
     )
 
 
@@ -63,7 +58,7 @@ async def planos(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 "<b>Assinatura ativa</b>\n\n"
                 f"<b>Plano:</b> {html.escape(str(sub.get('plan_name') or 'BaltigoFlix'))}\n"
                 f"<b>Validade restante:</b> {days_left} dia(s)\n\n"
-                "Esse acesso libera o bot de series e o bot de animes pelo mesmo Telegram ID."
+                "Esse acesso libera o bot de séries e o bot de animes pelo mesmo Telegram ID."
             ),
             parse_mode="HTML",
         )
@@ -118,13 +113,13 @@ async def answer_subscription_check(query, user_id: int) -> None:
     if not sub:
         if not cakto_api_configured():
             text = (
-                "Nao consegui verificar pela API da Cakto.\n\n"
-                "Chame o suporte para fazermos a liberacao manual."
+                "Não consegui verificar pela API da Cakto.\n\n"
+                "Chame o suporte para fazermos a liberação manual."
             )
         else:
             text = (
-                "Pagamento ainda nao confirmado.\n\n"
-                "Se o Pix ja saiu da conta, aguarde alguns instantes e toque em verificar de novo."
+                "Pagamento ainda não confirmado.\n\n"
+                "Se o Pix já saiu da conta, aguarde alguns instantes e toque em verificar de novo."
             )
         await query.answer(text, show_alert=True)
         return

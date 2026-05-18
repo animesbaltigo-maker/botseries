@@ -23,25 +23,29 @@ def _build_caption(detail: dict) -> str:
     desc = html.escape((detail.get("description") or "Sem sinopse.")[:400])
     director = html.escape(detail.get("director") or "")
 
-    parts = [f"🎬 <b>{title}</b>"]
+    meta = []
     if year:
-        parts.append(f"📅 <b>Ano:</b> <i>{year}</i>")
+        meta.append(f"<b>Ano:</b> <i>{year}</i>")
     if duration:
-        parts.append(f"⏱️ <b>Duração:</b> <i>{duration}</i>")
-    parts.append(f"🎙️ <b>Áudio:</b> <i>{audio}</i>")
-    parts.append(f"🎭 <b>Gêneros:</b> <i>{genres_str}</i>")
+        meta.append(f"<b>Duração:</b> <i>{duration}</i>")
+    if audio:
+        meta.append(f"<b>Áudio:</b> <i>{audio}</i>")
+    meta.append(f"<b>Gêneros:</b> <i>{genres_str}</i>")
     if director:
-        parts.append(f"🎥 <b>Diretor:</b> <i>{director}</i>")
-    parts.append("")
-    parts.append(f"📝 {desc}")
+        meta.append(f"<b>Diretor:</b> <i>{director}</i>")
 
-    return "\n".join(parts)
+    return (
+        f"🎬 <b>{title}</b>\n\n"
+        f"<blockquote>{chr(10).join(meta)}</blockquote>\n\n"
+        f"📝 <b>Sinopse</b>\n"
+        f"<i>{desc}</i>"
+    )
 
 
 def _build_keyboard(detail: dict) -> InlineKeyboardMarkup:
     url = detail.get("url", "")
     return InlineKeyboardMarkup([[
-        InlineKeyboardButton("▶️ Assistir agora", url=url)
+        InlineKeyboardButton("▶️ Abrir no bot", url=url)
     ]])
 
 

@@ -102,7 +102,8 @@ def _build_caption(detail: dict, seasons: list) -> str:
     return (
         f"📺 <b>{title}</b>\n\n"
         f"<blockquote>{quote_text}</blockquote>\n\n"
-        f"💬 <i>{description}</i>"
+        f"📝 <b>Sinopse</b>\n"
+        f"<i>{description}</i>"
     )
 
 

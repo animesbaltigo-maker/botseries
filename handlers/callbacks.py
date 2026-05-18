@@ -184,22 +184,24 @@ async def _send_offline_unlock_gate(query, user, title: str = "") -> None:
         "&text=" + quote_plus("Vem baixar series e filmes comigo:")
     )
     rows = [
-        [_copy_text_button("Copiar meu link", link)],
-        [InlineKeyboardButton("Compartilhar meu link", url=share_url)],
+        [_copy_text_button("📋 Copiar meu link", link)],
+        [InlineKeyboardButton("📤 Compartilhar no Telegram", url=share_url)],
     ]
     rows.extend([[InlineKeyboardButton(option["label"], url=option["url"])] for option in get_checkout_options(user_id)])
-    rows.append([InlineKeyboardButton("Ja paguei / verificar", callback_data="subcheck")])
-    media_line = f"\n<b>Conteudo:</b> <i>{html.escape(title)}</i>" if title else ""
+    rows.append([InlineKeyboardButton("✅ Já paguei / verificar", callback_data="subcheck")])
+    media_line = f"\n<b>Conteúdo:</b> <i>{html.escape(title)}</i>" if title else ""
     text = (
-        "<b>Download offline bloqueado</b>\n"
+        "🔒 <b>Download offline bloqueado</b>\n"
         f"{media_line}\n\n"
-        f"Indique <b>{required}</b> pessoas diferentes ou assine um plano para liberar.\n\n"
-        f"<b>Seu progresso:</b> <code>{current}/{required}</code>\n"
-        f"<b>Faltam:</b> <code>{missing}</code>\n\n"
-        "<b>Seu link:</b>\n"
+        "Você pode liberar de duas formas:\n\n"
+        f"<blockquote>🎁 Indique <b>{required}</b> pessoas diferentes\n"
+        "💎 Ou assine um plano BaltigoFlix</blockquote>\n\n"
+        f"📊 <b>Progresso:</b> <code>{current}/{required}</code>\n"
+        f"⏳ <b>Faltam:</b> <code>{missing}</code>\n\n"
+        "🔗 <b>Seu link de convite:</b>\n"
         f"<code>{html.escape(link)}</code>"
     )
-    await query.answer(f"Faltam {missing} indicacao(oes) ou uma assinatura ativa.", show_alert=True)
+    await query.answer(f"Faltam {missing} indicações ou uma assinatura ativa.", show_alert=True)
     if query.message:
         await query.message.reply_text(
             text,
@@ -432,7 +434,7 @@ def _watch_block_promo_key(query) -> str:
 def _watch_block_alert_text(user_id: int = 0) -> str:
     _, current, required = _offline_referral_progress(user_id)
     missing = max(0, required - current)
-    return f"Faltam {missing} indicacao(oes) ou uma assinatura ativa."
+    return f"Faltam {missing} indicações ou uma assinatura ativa."
 
 
 def _watch_block_message_text(user_id: int = 0) -> str:
@@ -440,14 +442,14 @@ def _watch_block_message_text(user_id: int = 0) -> str:
     _, current, required = _offline_referral_progress(user_id)
     missing = max(0, required - current)
     link = _offline_referral_url(user_id) if user_id else ""
-    link_block = f"\n\n<b>Seu link:</b>\n<code>{html.escape(link)}</code>" if link else ""
+    link_block = f"\n\n🔗 <b>Seu link de convite:</b>\n<code>{html.escape(link)}</code>" if link else ""
     return (
         f"🔒 <b>Conteúdo exclusivo da {brand}</b>\n\n"
-        "Libere este filme ou episódio de duas formas:\n\n"
-        f"• Indique <b>{required}</b> pessoas diferentes usando seu link\n"
-        "• Ou assine um dos planos abaixo\n\n"
-        f"<b>Seu progresso:</b> <code>{current}/{required}</code>\n"
-        f"<b>Faltam:</b> <code>{missing}</code>"
+        "Este filme ou episódio está bloqueado no momento.\n\n"
+        f"<blockquote>🎁 Indique <b>{required}</b> pessoas diferentes\n"
+        "💎 Ou assine um dos planos abaixo</blockquote>\n\n"
+        f"📊 <b>Seu progresso:</b> <code>{current}/{required}</code>\n"
+        f"⏳ <b>Faltam:</b> <code>{missing}</code>"
         f"{link_block}"
     )
 
@@ -464,9 +466,9 @@ def _watch_block_keyboard(user_id: int = 0) -> InlineKeyboardMarkup:
         for option in get_checkout_options(user_id)
     ]
     if link:
-        rows.insert(0, [_copy_text_button("Copiar meu link", link)])
-        rows.insert(1, [InlineKeyboardButton("Compartilhar meu link", url=share_url)])
-    rows.append([InlineKeyboardButton("Ja paguei / verificar", callback_data="subcheck")])
+        rows.insert(0, [_copy_text_button("📋 Copiar meu link", link)])
+        rows.insert(1, [InlineKeyboardButton("📤 Compartilhar no Telegram", url=share_url)])
+    rows.append([InlineKeyboardButton("✅ Já paguei / verificar", callback_data="subcheck")])
     if not rows or (len(rows) == 1 and WATCH_BLOCK_URL):
         rows.insert(0, [InlineKeyboardButton(f"Assinar {WATCH_BLOCK_BRAND}", url=WATCH_BLOCK_URL)])
     return InlineKeyboardMarkup(rows)
@@ -523,8 +525,8 @@ def _delivery_progress_text(payload: dict) -> str:
         pct = int((current / max(total, 1)) * 100) if total else 0
         total_text = _human_bytes(total) if total else "calculando"
         return (
-            "📥 <b>Baixando video</b>\n\n"
-            f"<b>Progresso:</b> {pct}%\n"
+            "📥 <b>Baixando para o Telegram</b>\n\n"
+            f"📊 <b>Progresso:</b> {pct}%\n"
             f"<code>{_human_bytes(current)} / {total_text}</code>"
         )
     if stage == "uploading":
@@ -532,15 +534,15 @@ def _delivery_progress_text(payload: dict) -> str:
         total = int((payload or {}).get("upload_total") or 0)
         pct = int((current / max(total, 1)) * 100) if total else 0
         return (
-            "📤 <b>Enviando video</b>\n\n"
-            f"<b>Progresso:</b> {pct}%\n"
+            "📤 <b>Enviando para você</b>\n\n"
+            f"📊 <b>Progresso:</b> {pct}%\n"
             f"<code>{_human_bytes(current)} / {_human_bytes(total)}</code>"
         )
     if stage == "cached":
-        return "♻️ <b>Enviando video salvo...</b>"
+        return "♻️ <b>Reenviando arquivo salvo...</b>"
     if stage == "done":
-        return "✅ <b>Video enviado.</b>"
-    return "⏳ <b>Preparando video...</b>"
+        return "✅ <b>Vídeo enviado.</b>"
+    return "⏳ <b>Preparando vídeo...</b>"
 
 
 async def _finish_video_delivery(message, request, reply_markup) -> None:
@@ -568,7 +570,7 @@ async def _finish_video_delivery(message, request, reply_markup) -> None:
             pass
 
     try:
-        status_message = await message.reply_text("⏳ <b>Preparando video...</b>", parse_mode="HTML")
+        status_message = await message.reply_text("⏳ <b>Preparando vídeo...</b>", parse_mode="HTML")
         await deliver_video_request(
             message.get_bot(),
             message.chat.id,
@@ -731,7 +733,8 @@ def _build_detail_text(detail: dict) -> str:
     return (
         f"{title_emoji} <b>{title}</b>\n\n"
         f"<blockquote>{quote_text}</blockquote>\n\n"
-        f"💬 <i>{description}</i>"
+        f"📝 <b>Sinopse</b>\n"
+        f"<i>{description}</i>"
     )
 
 
@@ -781,7 +784,7 @@ def _episodes_text(title: str, season: int, total: int, audio_key: str) -> str:
         f"🎞️ <b>Episódios:</b> {total}\n"
         f"🎙️ <b>Idioma:</b> {audio_label}"
         "</blockquote>\n\n"
-        "<i>Selecione o episódio ou temporada que desejar.</i>"
+        "<i>Escolha um episódio abaixo.</i>"
     )
 
 
@@ -862,8 +865,7 @@ def _player_text(series_title: str, season: int, episode: dict, position: int, t
         f"🎞️ <b>Episódio:</b> {episode_counter}\n"
         f"📚 <b>Temporada:</b> {season}"
         "</blockquote>\n\n"
-        "<b>Obs:</b> <i>Este bot não armazena nenhum arquivo em seu servidor. "
-        "Todos os conteúdos são fornecidos por terceiros não afiliados.</i>"
+        "<i>Use os botões abaixo para baixar no Telegram ou marcar como visto.</i>"
     )
 
 
@@ -876,8 +878,7 @@ def _movie_player_text(title: str, audio_key: str) -> str:
         "🎬 <b>Tipo:</b> Filme\n"
         f"🎙️ <b>Idioma:</b> {audio_label}"
         "</blockquote>\n\n"
-        "<b>Obs:</b> <i>Este bot não armazena nenhum arquivo em seu servidor. "
-        "Todos os conteúdos são fornecidos por terceiros não afiliados.</i>"
+        "<i>Use os botões abaixo para baixar no Telegram ou marcar como visto.</i>"
     )
 
 
@@ -948,11 +949,11 @@ def _player_keyboard(
     rows: list[list[InlineKeyboardButton]] = []
 
     if episode_idx is not None:
-        rows.append([InlineKeyboardButton("📥 Baixar no Telegram", callback_data=f"pb_dl_ep|{session_token}|{season}|{episode_idx}")])
-        rows.append([InlineKeyboardButton("? Marcar como visto", callback_data=f"pb_seen_ep|{session_token}|{season}|{episode_idx}")])
+        rows.append([InlineKeyboardButton("📥 Baixar episódio", callback_data=f"pb_dl_ep|{session_token}|{season}|{episode_idx}")])
+        rows.append([InlineKeyboardButton("✅ Marcar como visto", callback_data=f"pb_seen_ep|{session_token}|{season}|{episode_idx}")])
     else:
-        rows.append([InlineKeyboardButton("📥 Baixar no Telegram", callback_data=f"pb_dl_movie|{session_token}")])
-        rows.append([InlineKeyboardButton("? Marcar como visto", callback_data=f"pb_seen_movie|{session_token}")])
+        rows.append([InlineKeyboardButton("📥 Baixar filme", callback_data=f"pb_dl_movie|{session_token}")])
+        rows.append([InlineKeyboardButton("✅ Marcar como visto", callback_data=f"pb_seen_movie|{session_token}")])
 
     if episode_idx is not None and total_episodes > 0:
         nav: list[InlineKeyboardButton] = []
@@ -1564,7 +1565,7 @@ async def _handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         session_token = parts[1]
         session = _get_content_session(context, session_token)
         if not session:
-            await _safe_answer(query, "SessÃ£o expirada. FaÃ§a uma nova busca.", show_alert=True)
+            await _safe_answer(query, "Sessão expirada. Faça uma nova busca.", show_alert=True)
             return
         selected_audio = str(session.get("selected_audio") or session.get("default_audio") or "").strip().lower()
         content_id = _movie_delivery_cache_key(session)
@@ -1584,14 +1585,14 @@ async def _handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         episode_idx = int(parts[3]) if parts[3].isdigit() else 0
         session = _get_content_session(context, session_token)
         if not session:
-            await _safe_answer(query, "SessÃ£o expirada. FaÃ§a uma nova busca.", show_alert=True)
+            await _safe_answer(query, "Sessão expirada. Faça uma nova busca.", show_alert=True)
             return
         try:
             _, episodes = await _load_series_payload(context, session_token, season)
         except Exception:
             episodes = []
         if not episodes or episode_idx < 0 or episode_idx >= len(episodes):
-            await _safe_answer(query, "EpisÃ³dio invÃ¡lido.", show_alert=True)
+            await _safe_answer(query, "Episódio inválido.", show_alert=True)
             return
         episode = episodes[episode_idx]
         episode_number = _episode_number_value(episode, episode_idx)
@@ -1629,7 +1630,7 @@ async def _handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         session = _get_content_session(context, session_token)
         if not session:
             await _restore_reply_markup(getattr(query, "message", None), original_markup)
-            await _safe_answer(query, "SessÃ£o expirada. FaÃ§a uma nova busca.", show_alert=True)
+            await _safe_answer(query, "Sessão expirada. Faça uma nova busca.", show_alert=True)
             return
 
         if _is_watch_locked_for_user(user):
@@ -1645,14 +1646,14 @@ async def _handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         except Exception as exc:
             print("ERRO MOVIE DOWNLOAD:", repr(exc))
             await _restore_reply_markup(getattr(query, "message", None), original_markup)
-            await _safe_answer(query, "NÃ£o consegui preparar o filme agora.", show_alert=True)
+            await _safe_answer(query, "Não consegui preparar o filme agora.", show_alert=True)
             return
 
         download_candidates = _download_candidates(player_links)
         player_url = download_candidates[0]["url"] if download_candidates else ""
         if not player_url or not _is_direct_stream_url(player_url):
             await _restore_reply_markup(getattr(query, "message", None), original_markup)
-            await _safe_answer(query, "Esse filme ainda nÃ£o pode ser enviado no Telegram.", show_alert=True)
+            await _safe_answer(query, "Esse filme ainda não pode ser enviado no Telegram.", show_alert=True)
             return
 
         selected_audio = str(session.get("selected_audio") or session.get("default_audio") or "").strip().lower()
@@ -1665,9 +1666,9 @@ async def _handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             query_text=title,
         )
         caption = (
-            f"<b>{html.escape(title)}</b>\n"
-            "<b>Tipo:</b> Filme\n"
-            f"<b>Idioma:</b> {html.escape(_audio_text_label(selected_audio))}"
+            f"🎬 <b>{html.escape(title)}</b>\n"
+            "🎞️ <b>Tipo:</b> Filme\n"
+            f"🎙️ <b>Idioma:</b> {html.escape(_audio_text_label(selected_audio))}"
         )
         try:
             await enqueue_video_download(
@@ -1689,7 +1690,7 @@ async def _handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             await _safe_answer(query, str(error), show_alert=True)
             return
         await _restore_reply_markup(getattr(query, "message", None), original_markup)
-        await _safe_answer(query, "â³ Preparando o filme no Telegram...")
+        await _safe_answer(query, "⏳ Preparando o filme no Telegram...")
         return
 
     if data.startswith("pb_dl_ep|"):
@@ -1706,7 +1707,7 @@ async def _handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         session = _get_content_session(context, session_token)
         if not session:
             await _restore_reply_markup(getattr(query, "message", None), original_markup)
-            await _safe_answer(query, "SessÃ£o expirada. FaÃ§a uma nova busca.", show_alert=True)
+            await _safe_answer(query, "Sessão expirada. Faça uma nova busca.", show_alert=True)
             return
 
         if _is_watch_locked_for_user(user):
@@ -1722,12 +1723,12 @@ async def _handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         except Exception as exc:
             print("ERRO DOWNLOAD EPISODIO:", repr(exc))
             await _restore_reply_markup(getattr(query, "message", None), original_markup)
-            await _safe_answer(query, "NÃ£o consegui preparar esse episÃ³dio agora.", show_alert=True)
+            await _safe_answer(query, "Não consegui preparar esse episódio agora.", show_alert=True)
             return
 
         if not episodes or episode_idx < 0 or episode_idx >= len(episodes):
             await _restore_reply_markup(getattr(query, "message", None), original_markup)
-            await _safe_answer(query, "EpisÃ³dio invÃ¡lido.", show_alert=True)
+            await _safe_answer(query, "Episódio inválido.", show_alert=True)
             return
 
         episode = episodes[episode_idx]
@@ -1748,14 +1749,14 @@ async def _handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         player_url = download_candidates[0]["url"] if download_candidates else ""
         if not player_url or not _is_direct_stream_url(player_url):
             await _restore_reply_markup(getattr(query, "message", None), original_markup)
-            await _safe_answer(query, "Esse episÃ³dio ainda nÃ£o pode ser enviado no Telegram.", show_alert=True)
+            await _safe_answer(query, "Esse episódio ainda não pode ser enviado no Telegram.", show_alert=True)
             return
 
         if isinstance(episode, dict):
             episode["player_links"] = player_links
         context.user_data[_episodes_cache_key(session_token, season, selected_audio)] = episodes
 
-        title = str(session.get("title") or "SÃ©rie").strip() or "SÃ©rie"
+        title = str(session.get("title") or "Série").strip() or "Série"
         episode_number = _episode_number_value(episode, episode_idx)
         label = _episode_display_label(episode, episode_idx)
         server_label = _best_download_server(player_links, player_url)
@@ -1766,10 +1767,10 @@ async def _handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             query_text=f"{title} - {label}",
         )
         caption = (
-            f"<b>{html.escape(title)}</b>\n"
-            f"<b>Episodio:</b> {html.escape(label)}\n"
-            f"<b>Temporada:</b> {season}\n"
-            f"<b>Idioma:</b> {html.escape(_audio_text_label(selected_audio))}"
+            f"📺 <b>{html.escape(title)}</b>\n"
+            f"🎞️ <b>Episódio:</b> {html.escape(label)}\n"
+            f"📚 <b>Temporada:</b> {season}\n"
+            f"🎙️ <b>Idioma:</b> {html.escape(_audio_text_label(selected_audio))}"
         )
         try:
             await enqueue_video_download(
@@ -1791,7 +1792,7 @@ async def _handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             await _safe_answer(query, str(error), show_alert=True)
             return
         await _restore_reply_markup(getattr(query, "message", None), original_markup)
-        await _safe_answer(query, "â³ Preparando o episÃ³dio no Telegram...")
+        await _safe_answer(query, "⏳ Preparando o episódio no Telegram...")
         return
 
     if data.startswith("pb_play|"):

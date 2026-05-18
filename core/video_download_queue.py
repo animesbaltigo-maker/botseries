@@ -388,11 +388,11 @@ async def _progress(entry: dict, job: VideoDownloadJob, downloaded: int, total: 
     total_text = _human_size(total) if total else "calculando"
     pct = int((downloaded / total) * 100) if total else 0
     text = (
-        "<b>Baixando video</b>\n\n"
-        f"<b>Titulo:</b> {html.escape(job.title)}\n"
-        f"<b>Item:</b> {html.escape(str(job.item_label))}\n"
-        f"<b>Servidor:</b> {html.escape(job.quality)}\n"
-        f"<b>Progresso:</b> {pct}%\n"
+        "📥 <b>Baixando para o Telegram</b>\n\n"
+        f"🎬 <b>Título:</b> {html.escape(job.title)}\n"
+        f"🎞️ <b>Item:</b> {html.escape(str(job.item_label))}\n"
+        f"🗂 <b>Fonte:</b> {html.escape(job.quality)}\n"
+        f"📊 <b>Progresso:</b> {pct}%\n"
         f"{_progress_bar(downloaded, total)}\n"
         f"<code>{_human_size(downloaded)} / {total_text}</code>"
     )
@@ -403,10 +403,10 @@ async def _progress(entry: dict, job: VideoDownloadJob, downloaded: int, total: 
 async def _upload_progress(entry: dict, job: VideoDownloadJob, current: int, total: int) -> None:
     pct = int((current / max(total, 1)) * 100)
     text = (
-        "<b>Enviando video</b>\n\n"
-        f"<b>Titulo:</b> {html.escape(job.title)}\n"
-        f"<b>Item:</b> {html.escape(str(job.item_label))}\n"
-        f"<b>Progresso:</b> {pct}%\n"
+        "📤 <b>Enviando para você</b>\n\n"
+        f"🎬 <b>Título:</b> {html.escape(job.title)}\n"
+        f"🎞️ <b>Item:</b> {html.escape(str(job.item_label))}\n"
+        f"📊 <b>Progresso:</b> {pct}%\n"
         f"{_progress_bar(current, total)}\n"
         f"<code>{_human_size(current)} / {_human_size(total)}</code>"
     )
@@ -788,7 +788,7 @@ async def _send_video_safe(
         return sent
     except TimedOut:
         try:
-            await bot.send_message(chat_id, "O envio demorou mais que o esperado. Confere se o video ja chegou.")
+            await bot.send_message(chat_id, "O envio demorou mais que o esperado. Confira se o vídeo já chegou.")
         except Exception:
             pass
         return True
@@ -828,9 +828,9 @@ async def _process_job(app, job: VideoDownloadJob) -> None:
             await _safe_edit(
                 message,
                 (
-                    "<b>Enviando video</b>\n\n"
-                    f"<b>Titulo:</b> {html.escape(job.title)}\n"
-                    f"<b>Item:</b> {html.escape(str(job.item_label))}\n"
+                    "<b>Enviando para você</b>\n\n"
+                    f"🎬 <b>Título:</b> {html.escape(job.title)}\n"
+                    f"🎞️ <b>Item:</b> {html.escape(str(job.item_label))}\n"
                     f"<b>Tamanho:</b> {_human_size(path.stat().st_size)}"
                 ),
             )
@@ -883,14 +883,15 @@ async def _process_job(app, job: VideoDownloadJob) -> None:
             await _safe_edit(
                 message,
                 (
-                    "<b>Video enviado</b>\n\n"
-                    f"<b>Titulo:</b> {html.escape(job.title)}\n"
-                    f"<b>Item:</b> {html.escape(str(job.item_label))}"
+                    "✅ <b>Vídeo enviado</b>\n\n"
+                    f"🎬 <b>Título:</b> {html.escape(job.title)}\n"
+                    f"🎞️ <b>Item:</b> {html.escape(str(job.item_label))}\n\n"
+                    "<i>Por segurança, o arquivo some em até 24h ou quando for marcado como visto.</i>"
                 ),
             )
     except Exception as error:
         for message in list(entry["status_messages"]):
-            await _safe_edit(message, f"<b>Falha ao baixar video:</b>\n<code>{html.escape(str(error))}</code>")
+            await _safe_edit(message, f"❌ <b>Falha ao baixar vídeo</b>\n\n<code>{html.escape(str(error))}</code>")
     finally:
         await _delete_downloaded_file(path)
         try:
@@ -923,9 +924,9 @@ async def enqueue_video_download(app, job: VideoDownloadJob) -> int:
         status = await app.bot.send_message(
             job.chat_id,
             (
-                "<b>Enviando video</b>\n\n"
-                f"<b>Titulo:</b> {html.escape(job.title)}\n"
-                f"<b>Item:</b> {html.escape(str(job.item_label))}\n"
+                "<b>Enviando para você</b>\n\n"
+                f"🎬 <b>Título:</b> {html.escape(job.title)}\n"
+                f"🎞️ <b>Item:</b> {html.escape(str(job.item_label))}\n"
                 "Status: <b>encontrado no acervo</b>"
             ),
             parse_mode="HTML",
@@ -950,16 +951,17 @@ async def enqueue_video_download(app, job: VideoDownloadJob) -> int:
             await _safe_edit(
                 status,
                 (
-                    "<b>Video enviado</b>\n\n"
-                    f"<b>Titulo:</b> {html.escape(job.title)}\n"
-                    f"<b>Item:</b> {html.escape(str(job.item_label))}"
+                    "✅ <b>Vídeo enviado</b>\n\n"
+                    f"🎬 <b>Título:</b> {html.escape(job.title)}\n"
+                    f"🎞️ <b>Item:</b> {html.escape(str(job.item_label))}\n\n"
+                    "<i>Por segurança, o arquivo some em até 24h ou quando for marcado como visto.</i>"
                 ),
             )
             return queue.qsize()
 
     async with _enqueue_lock:
         if job.user_id in _active_user_jobs:
-            raise RuntimeError("Voce ja tem um video em download ou upload. Aguarde terminar para pedir outro.")
+            raise RuntimeError("Você já tem um vídeo em download ou upload. Aguarde terminar para pedir outro.")
         if key in _active_jobs:
             entry = _active_jobs[key]
             _active_user_jobs[job.user_id] = key
@@ -967,8 +969,8 @@ async def enqueue_video_download(app, job: VideoDownloadJob) -> int:
                 job.chat_id,
                 (
                     "<b>Pedido recebido</b>\n\n"
-                    f"<b>Titulo:</b> {html.escape(job.title)}\n"
-                    f"<b>Item:</b> {html.escape(str(job.item_label))}\n"
+                    f"🎬 <b>Título:</b> {html.escape(job.title)}\n"
+                    f"🎞️ <b>Item:</b> {html.escape(str(job.item_label))}\n"
                     "Status: <b>ja esta sendo preparado</b>"
                 ),
                 parse_mode="HTML",
@@ -984,8 +986,8 @@ async def enqueue_video_download(app, job: VideoDownloadJob) -> int:
                 job.chat_id,
                 (
                     "<b>Pedido recebido</b>\n\n"
-                    f"<b>Titulo:</b> {html.escape(job.title)}\n"
-                    f"<b>Item:</b> {html.escape(str(job.item_label))}\n"
+                    f"🎬 <b>Título:</b> {html.escape(job.title)}\n"
+                    f"🎞️ <b>Item:</b> {html.escape(str(job.item_label))}\n"
                     "Status: <b>na fila</b>"
                 ),
                 parse_mode="HTML",
